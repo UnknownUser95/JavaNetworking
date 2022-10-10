@@ -16,10 +16,11 @@ public class ClientExample extends Client {
 		System.out.print("input name: ");
 		String input;
 		try (BufferedReader br = new BufferedReader(new InputStreamReader(System.in))) {
-			while(!(input = br.readLine()).equals("!exit")) {
+			while(!(input = br.readLine()).equals("!exit") && client.isConnected()) {
 				client.sendMessage(new Message<>(MessageType.TEXT, input));
 			}
 		} catch(IOException exc) {}
+		client.disconnect();
 	}
 
 	@Override
@@ -33,11 +34,11 @@ public class ClientExample extends Client {
 	}
 
 	@Override
-	public void onDisconnect(boolean withError) {
-		if(withError) {
-			System.out.println("forced disconnect");
+	public void onDisconnect(boolean byError) {
+		if(byError) {
+			System.out.println("disconnected with error");
 		} else {
-			System.out.println("disconnected");
+			System.out.println("forced disconnect - server shut down");
 		}
 	}
 }

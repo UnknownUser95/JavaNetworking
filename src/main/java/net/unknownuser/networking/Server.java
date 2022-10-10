@@ -6,49 +6,147 @@ import java.util.*;
 import java.util.concurrent.*;
 
 public abstract class Server {
-	private final int port;
+	private int port;
 	protected ServerSocket socket;
+	
 	protected final ArrayList<Connection> connectedClients = new ArrayList<>();
 	protected final LinkedBlockingQueue<MessageToSend> messagesToSend = new LinkedBlockingQueue<>();
+	
+	protected Thread messageListener = null;
+	protected Thread connectionAccepter = null;
 	
 	protected Server(int port) {
 		super();
 		this.port = port;
 	}
 	
-	public abstract void onMessageReceived(MessageToSend message);
+	/**
+	 * Whenever a message is received from a client, this method is called with the received message
+	 * and the connection of the sender.
+	 * 
+	 * @param message The received message. Note that the message doesn't have any generic types.
+	 * @param sender  The connection of the sender.
+	 */
+	public abstract void onMessageReceived(Message<?, ?> message, Connection sender);
+	/**
+	 * This method is called whenever a client connects to this server. The connect, the connection
+	 * has to pass the {@link #acceptConnection(Connection) acceptConnection} check.
+	 * 
+	 * @param client The newly connected client.
+	 */
 	public abstract void onClientConnected(Connection client);
+	/**
+	 * Whenever a client disconnects this method is called.
+	 * 
+	 * @param client The disconnected client connection.
+	 */
 	public abstract void onClientDisconnected(Connection client);
 	
-	public void start() throws IOException {
-		this.socket = new ServerSocket(port);
-		Thread connectionAccepter = new Thread(this::waitForNewConnections);
-		connectionAccepter.start();
-		Thread messageListener = new Thread(this::waitForMessages);
-		messageListener.start();
-		System.out.println("server started at port " + getPort());
+	/**
+	 * Whether the connection should be accepted or not.<br>
+	 * Return {@code true} means the server will accept the connection, {@code false} means it will
+	 * reject it.
+	 * 
+	 * @param connection The inbound connection.
+	 * @return {@code true} if the connection should be accepted, {@code false} if it should be
+	 *         rejected.
+	 */
+	protected boolean acceptConnection(Connection connection) {
+		return true;
 	}
 	
-	public void addMessageToQueue(MessageToSend message) {
-		if(!messagesToSend.offer(message)) {
-			System.err.println("could not add message");
+	/**
+	 * Starts the server.
+	 * 
+	 * @throws IOException The exception when an error occurs while starting the server.
+	 */
+	public synchronized void start() throws IOException {
+		if(isRunning()) {
+			return;
+		}
+		
+		synchronized (this) {
+			this.socket = new ServerSocket(port);
+			connectionAccepter = new Thread(this::waitForNewConnections, "waitForNewConnections");
+			connectionAccepter.start();
+			messageListener = new Thread(this::waitForMessages, "waitForMessages");
+			messageListener.start();
+			System.out.printf("server at port %d started%n", getPort());
 		}
 	}
 	
+	/**
+	 * Shutdowns this server. Calling it after the server has been shut down doesn't do anything.
+	 * 
+	 * @throws IOException The exception, when an error occurs during shutdown.
+	 */
+	public synchronized void shutdown() throws IOException {
+		if(!isRunning()) {
+			return;
+		}
+		
+		synchronized (this) {
+			try {
+				System.out.print("shutting down...\r");
+				// stop threads
+				messageListener.interrupt();
+				connectionAccepter.interrupt();
+				
+				// clear message queue
+				messagesToSend.clear();
+				// close all connections and socket
+				closeAllConnections();
+				while(!connectedClients.isEmpty()) {
+					// wait until all connections are closed
+				}
+				socket.close();
+				System.out.printf("server at port %d shut down%n", getPort());
+			} catch(IOException exc) {
+				System.err.println("couldn't shutdown server");
+				throw exc;
+			}
+		}
+	}
+	
+	/**
+	 * Closes the connection to all connected clients.
+	 */
+	private void closeAllConnections() {
+		connectedClients.forEach(Connection::disconnect);
+	}
+	
+	/**
+	 * Adds a message to the message queue.
+	 * 
+	 * @param message The message to add to the queue.
+	 */
+	public boolean addMessageToQueue(MessageToSend message) {
+		return messagesToSend.offer(message);
+	}
+	
+	/**
+	 * Waits for new messages to send and processes them.
+	 */
 	private void waitForMessages() {
 		try {
 			while(!socket.isClosed()) {
 				MessageToSend message = messagesToSend.take();
-				
-				onMessageReceived(message);
+				if(message != null) {
+					onMessageReceived(message.message, message.sender);
+				}
 			}
 		} catch(InterruptedException exc) {
-			System.err.println("server interrupted");
-			exc.printStackTrace();
+			// thrown when the server is shutting down
 		}
 	}
 	
-	public void broadcastMessage(MessageToSend message) {
+	/**
+	 * Sends a message to all connected clients.
+	 * 
+	 * @param message The message to send, excluding the sender. (using {@code null} as the sender,
+	 *                sends it to everyone).
+	 */
+	public synchronized void broadcastMessage(MessageToSend message) {
 		for(Connection conn : connectedClients) {
 			if(conn.equals(message.sender)) {
 				continue;
@@ -58,44 +156,98 @@ public abstract class Server {
 		}
 	}
 	
+	/**
+	 * Waits for a new connection and, if the connection is accepted via
+	 * {@link #acceptConnection(Connection) acceptConnection}, is added to it's connected clients.
+	 */
 	private void waitForNewConnections() {
 		while(!socket.isClosed()) {
 			try {
 				Socket connection = socket.accept();
 				if(connection != null) {
 					Connection conn = new Connection(connection, this);
-					connectedClients.add(conn);
-					Thread clientThread = new Thread(conn);
-					clientThread.setDaemon(true);
-					clientThread.start();
-					
-					onClientConnected(conn);
+					if(acceptConnection(conn)) {
+						connectedClients.add(conn);
+						Thread clientThread = new Thread(conn);
+						clientThread.setDaemon(true);
+						clientThread.start();
+						
+						onClientConnected(conn);
+					} else {
+						conn.disconnect();
+					}
 				}
 			} catch(IOException exc) {
-				System.out.println("[Server][Warning] error during connection accepting");
-				System.out.println(exc.getMessage());
+				if(!(exc instanceof SocketException && exc.getMessage().equals("Socket closed"))) {
+					System.out.println("[Server][Warning] error during connection accepting");
+					exc.printStackTrace();
+					// no idea what can cause this
+				}
 			}
 		}
 	}
 	
+	/**
+	 * Removes the given connection from this server. Calls the {@link Connection#disconnect()
+	 * disconnect} method of the connection.
+	 * 
+	 * @param conn The connection to remove.
+	 */
 	protected void removeConnection(Connection conn) {
 		if(connectedClients.contains(conn)) {
 			conn.disconnect();
 			connectedClients.remove(conn);
 			onClientDisconnected(conn);
 		} else {
-			System.err.printf("[Server][Warning]: couldn't remove connection (%s)%n", conn);
+			System.out.printf("[Server][Warning] connection (%s) is not a connected client%n", conn);
 		}
 	}
 	
+	/**
+	 * Gets the list of currently connected clients.
+	 * 
+	 * @return The connected clients.
+	 */
 	public List<Connection> getConnectedClients() {
 		return connectedClients;
 	}
 	
+	/**
+	 * Gets the port, which the server is using.
+	 * 
+	 * @return This server's port.
+	 */
 	public int getPort() {
 		return port;
 	}
-
+	
+	/**
+	 * Changes the port of this server. It can only be changed, if the server is shut down.
+	 * 
+	 * @param newPort The new port of this server.
+	 * @return {@code true} if the port has been changed, {@code false} if no change has been made.
+	 */
+	public boolean setPort(int newPort) {
+		// can only be changed when entire server is controlled
+		synchronized (this) {
+			if(isRunning()) {
+				return false;
+			} else {
+				port = newPort;
+				return true;
+			}			
+		}
+	}
+	
+	/**
+	 * Returns whether this server is currently running.
+	 * 
+	 * @return The status of this server.
+	 */
+	public boolean isRunning() {
+		return socket != null && !socket.isClosed();
+	}
+	
 	@Override
 	public boolean equals(Object obj) {
 		if(obj == null) {

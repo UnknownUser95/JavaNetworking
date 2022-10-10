@@ -17,6 +17,10 @@ public class Connection implements Runnable {
 		this.server = server;
 	}
 	
+	/**
+	 * Starts to listen for incoming messages.<br>
+	 * Entry point for threads.
+	 */
 	@Override
 	public void run() {
 		while(!socket.isClosed()) {
@@ -24,6 +28,9 @@ public class Connection implements Runnable {
 		}
 	}
 	
+	/**
+	 * Waits for a message from the server and processes it.
+	 */
 	private void receiveMessage() {
 		try {
 			Message<?, ?> message = (Message<?, ?>) socketReader.readObject();
@@ -33,12 +40,17 @@ public class Connection implements Runnable {
 				System.out.println("error while reading message");
 				exc.printStackTrace();
 			}
-			disconnectAndRemove();
+			server.removeConnection(this);
 		} catch(ClassNotFoundException exc) {
 			System.err.println("received object could not be mapped to a class");
 		}
 	}
 	
+	/**
+	 * Sends a message to the connected server.
+	 * 
+	 * @param message The message to send.
+	 */
 	public void sendMessage(Message<?, ?> message) {
 		try {
 			socketWriter.writeObject(message);
@@ -46,42 +58,52 @@ public class Connection implements Runnable {
 		} catch(IOException exc) {
 			System.out.println("error while sending message");
 			System.out.println(exc.getMessage());
-			disconnectAndRemove();
+			server.removeConnection(this);
 		}
 	}
 	
-	public void disconnectAndRemove() {
-		disconnect();
-		server.removeConnection(this);
-	}
-	
+	/**
+	 * Closes all streams. This disconnects the client.<br>
+	 * Do not use this instance after this method has been called.
+	 */
 	public void disconnect() {
-		try {
-			if(socketWriter != null) {
-				socketWriter.close();				
-			}
-			if(socketReader != null) {				
+		if(!socket.isClosed()) {
+			try {
+				socketWriter.close();
 				socketReader.close();
+				socket.close();
+			} catch(IOException exc) {
+				System.err.println("error while closing");
+				exc.printStackTrace();
 			}
-			if(socket != null) {
-				socket.close();				
-			}
-		} catch(IOException exc) {
-			System.err.println("error while closing");
-			exc.printStackTrace();
 		}
 	}
 	
+	/**
+	 * Gets the InetAddress of this connection.
+	 * 
+	 * @return
+	 */
 	public InetAddress getAddress() {
 		return socket.getInetAddress();
 	}
 	
+	/**
+	 * Gets the IP of the connected client.
+	 * 
+	 * @return The IP as a string.
+	 */
 	public String getIP() {
 		return getAddress().toString().substring(1);
 	}
 	
+	/**
+	 * Gets the port of this connection.
+	 * 
+	 * @return The port this connection is bound to.
+	 */
 	public int getPort() {
-		return socket.getLocalPort();
+		return socket.getPort();
 	}
 	
 	@Override
@@ -103,5 +125,9 @@ public class Connection implements Runnable {
 	@Override
 	public String toString() {
 		return "Connection{socketStatus=" + !socket.isClosed() + ", ip=" + getIP() + ", port=" + getPort() + ", server=" + server + "}";
+	}
+	
+	public String toStringWithoutServer() {
+		return "Connection{socketStatus=" + !socket.isClosed() + ", ip=" + getIP() + ", port=" + getPort() + "}";
 	}
 }

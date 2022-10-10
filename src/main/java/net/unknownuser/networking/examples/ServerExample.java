@@ -23,7 +23,7 @@ public class ServerExample extends Server {
 			server.start();
 			// server stays up for 60 seconds
 			try {
-				Thread.sleep(10000);
+				Thread.sleep(60000);
 			} catch(InterruptedException ignore) {}
 			// shut down server
 			server.shutdown();
@@ -39,7 +39,7 @@ public class ServerExample extends Server {
 		if(names.get(sender) == null) {
 			String newName = (String) message.content;
 			names.put(sender, newName);
-			System.out.printf("assigned name %s to %s%n", newName, sender);
+			System.out.printf("assigned name %s to %s%n", newName, sender.toStringWithoutServer());
 			broadcastMessage(new MessageToSend(new Message<>(MessageType.TEXT, newName + " has joined"), sender));
 			return;
 		}

@@ -36,9 +36,9 @@ public class ClientExample extends Client {
 	@Override
 	public void onDisconnect(boolean byError) {
 		if(byError) {
-			System.out.println("forced disconnect - server shut down");
-		} else {
 			System.out.println("disconnected with error");
+		} else {
+			System.out.println("forced disconnect - server shut down");
 		}
 	}
 }

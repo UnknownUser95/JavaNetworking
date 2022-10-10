@@ -8,9 +8,10 @@ import java.util.concurrent.*;
 public abstract class Server {
 	private int port;
 	protected ServerSocket socket;
+	
 	protected final ArrayList<Connection> connectedClients = new ArrayList<>();
 	protected final LinkedBlockingQueue<MessageToSend> messagesToSend = new LinkedBlockingQueue<>();
-	protected boolean running = false;
+	
 	protected Thread messageListener = null;
 	protected Thread connectionAccepter = null;
 	
@@ -54,53 +55,78 @@ public abstract class Server {
 		return true;
 	}
 	
+	/**
+	 * Starts the server.
+	 * 
+	 * @throws IOException The exception when an error occurs while starting the server.
+	 */
 	public synchronized void start() throws IOException {
-		this.socket = new ServerSocket(port);
-		connectionAccepter = new Thread(this::waitForNewConnections);
-		connectionAccepter.start();
-		messageListener = new Thread(this::waitForMessages);
-		messageListener.start();
-		running = true;
-		System.out.printf("server at port %d started%n", getPort());
-	}
-	
-	public synchronized void shutdown() {
-		if(!running) {
+		if(isRunning()) {
 			return;
 		}
 		
-		try {
-			System.out.print("shutting down...\r");
-			// stop threads
-			messageListener.interrupt();
-			connectionAccepter.interrupt();
-			
-			// clear message queue
-			messagesToSend.clear();
-			// close all connections and socket
-			closeAllConnections();
-			while(!connectedClients.isEmpty()) {
-				// wait until all connections are closed
-			}
-			socket.close();
-			running = false;
-			System.out.printf("server at port %d shut down%n", getPort());
-		} catch(IOException exc) {
-			System.err.println("couldn't shutdown server");
-			System.err.println(exc.getMessage());
+		synchronized (this) {
+			this.socket = new ServerSocket(port);
+			connectionAccepter = new Thread(this::waitForNewConnections, "waitForNewConnections");
+			connectionAccepter.start();
+			messageListener = new Thread(this::waitForMessages, "waitForMessages");
+			messageListener.start();
+			System.out.printf("server at port %d started%n", getPort());
 		}
 	}
 	
+	/**
+	 * Shutdowns this server. Calling it after the server has been shut down doesn't do anything.
+	 * 
+	 * @throws IOException The exception, when an error occurs during shutdown.
+	 */
+	public synchronized void shutdown() throws IOException {
+		if(!isRunning()) {
+			return;
+		}
+		
+		synchronized (this) {
+			try {
+				System.out.print("shutting down...\r");
+				// stop threads
+				messageListener.interrupt();
+				connectionAccepter.interrupt();
+				
+				// clear message queue
+				messagesToSend.clear();
+				// close all connections and socket
+				closeAllConnections();
+				while(!connectedClients.isEmpty()) {
+					// wait until all connections are closed
+				}
+				socket.close();
+				System.out.printf("server at port %d shut down%n", getPort());
+			} catch(IOException exc) {
+				System.err.println("couldn't shutdown server");
+				throw exc;
+			}
+		}
+	}
+	
+	/**
+	 * Closes the connection to all connected clients.
+	 */
 	private void closeAllConnections() {
 		connectedClients.forEach(Connection::disconnect);
 	}
 	
-	public void addMessageToQueue(MessageToSend message) {
-		if(!messagesToSend.offer(message)) {
-			System.err.println("could not add message");
-		}
+	/**
+	 * Adds a message to the message queue.
+	 * 
+	 * @param message The message to add to the queue.
+	 */
+	public boolean addMessageToQueue(MessageToSend message) {
+		return messagesToSend.offer(message);
 	}
 	
+	/**
+	 * Waits for new messages to send and processes them.
+	 */
 	private void waitForMessages() {
 		try {
 			while(!socket.isClosed()) {
@@ -110,11 +136,16 @@ public abstract class Server {
 				}
 			}
 		} catch(InterruptedException exc) {
-			// thrown when the server is shutting down, but just in case
-			shutdown();
+			// thrown when the server is shutting down
 		}
 	}
 	
+	/**
+	 * Sends a message to all connected clients.
+	 * 
+	 * @param message The message to send, excluding the sender. (using {@code null} as the sender,
+	 *                sends it to everyone).
+	 */
 	public synchronized void broadcastMessage(MessageToSend message) {
 		for(Connection conn : connectedClients) {
 			if(conn.equals(message.sender)) {
@@ -125,6 +156,10 @@ public abstract class Server {
 		}
 	}
 	
+	/**
+	 * Waits for a new connection and, if the connection is accepted via
+	 * {@link #acceptConnection(Connection) acceptConnection}, is added to it's connected clients.
+	 */
 	private void waitForNewConnections() {
 		while(!socket.isClosed()) {
 			try {
@@ -145,43 +180,72 @@ public abstract class Server {
 			} catch(IOException exc) {
 				if(!(exc instanceof SocketException && exc.getMessage().equals("Socket closed"))) {
 					System.out.println("[Server][Warning] error during connection accepting");
-					System.out.println(exc.getMessage());
-					// no idea what can cause this, shut down just in case
-					shutdown();
+					exc.printStackTrace();
+					// no idea what can cause this
 				}
 			}
 		}
 	}
 	
+	/**
+	 * Removes the given connection from this server. Calls the {@link Connection#disconnect()
+	 * disconnect} method of the connection.
+	 * 
+	 * @param conn The connection to remove.
+	 */
 	protected void removeConnection(Connection conn) {
-		conn.disconnect();
 		if(connectedClients.contains(conn)) {
+			conn.disconnect();
 			connectedClients.remove(conn);
 			onClientDisconnected(conn);
 		} else {
-			System.err.printf("[Server][Warning]: couldn't remove connection (%s)%n", conn);
+			System.out.printf("[Server][Warning] connection (%s) is not a connected client%n", conn);
 		}
 	}
 	
+	/**
+	 * Gets the list of currently connected clients.
+	 * 
+	 * @return The connected clients.
+	 */
 	public List<Connection> getConnectedClients() {
 		return connectedClients;
 	}
 	
+	/**
+	 * Gets the port, which the server is using.
+	 * 
+	 * @return This server's port.
+	 */
 	public int getPort() {
 		return port;
 	}
 	
+	/**
+	 * Changes the port of this server. It can only be changed, if the server is shut down.
+	 * 
+	 * @param newPort The new port of this server.
+	 * @return {@code true} if the port has been changed, {@code false} if no change has been made.
+	 */
 	public boolean setPort(int newPort) {
-		if(isRunning()) {
-			return false;
-		} else {
-			port = newPort;
-			return true;
+		// can only be changed when entire server is controlled
+		synchronized (this) {
+			if(isRunning()) {
+				return false;
+			} else {
+				port = newPort;
+				return true;
+			}			
 		}
 	}
 	
+	/**
+	 * Returns whether this server is currently running.
+	 * 
+	 * @return The status of this server.
+	 */
 	public boolean isRunning() {
-		return running;
+		return socket != null && !socket.isClosed();
 	}
 	
 	@Override

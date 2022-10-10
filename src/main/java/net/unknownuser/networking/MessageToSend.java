@@ -1,5 +1,8 @@
 package net.unknownuser.networking;
 
+/**
+ * A message ready to be send.
+ */
 public class MessageToSend {
 	public final Message<?, ?> message;
 	public final Connection sender;

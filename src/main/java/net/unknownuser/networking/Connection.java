@@ -29,12 +29,11 @@ public class Connection implements Runnable {
 			Message<?, ?> message = (Message<?, ?>) socketReader.readObject();
 			server.addMessageToQueue(new MessageToSend(message, this));
 		} catch(IOException exc) {
-			if(!(exc instanceof EOFException)) {
+			if(!(exc instanceof EOFException) && !(exc instanceof SocketException && exc.getMessage().equals("Socket closed"))) {
 				System.out.println("error while reading message");
 				exc.printStackTrace();
 			}
-			disconnect();
-			server.removeConnection(this);
+			disconnectAndRemove();
 		} catch(ClassNotFoundException exc) {
 			System.err.println("received object could not be mapped to a class");
 		}
@@ -47,8 +46,13 @@ public class Connection implements Runnable {
 		} catch(IOException exc) {
 			System.out.println("error while sending message");
 			System.out.println(exc.getMessage());
-			disconnect();
+			disconnectAndRemove();
 		}
+	}
+	
+	public void disconnectAndRemove() {
+		disconnect();
+		server.removeConnection(this);
 	}
 	
 	public void disconnect() {

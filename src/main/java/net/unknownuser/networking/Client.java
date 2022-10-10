@@ -9,6 +9,8 @@ public abstract class Client {
 	protected Socket socket;
 	protected ObjectOutputStream socketWriter;
 	protected ObjectInputStream socketReader;
+	protected Thread messageReceiver = null;
+	protected boolean connected = false;
 	
 	protected Client(String ip, int port) {
 		super();
@@ -21,23 +23,26 @@ public abstract class Client {
 	public abstract void onDisconnect(boolean withError);
 	
 	public void connect() throws IOException {
-			this.socket = new Socket(ip, port);
-			this.socketWriter = new ObjectOutputStream(new DataOutputStream(socket.getOutputStream()));
-			this.socketReader = new ObjectInputStream(new DataInputStream(socket.getInputStream()));
-			Thread messageReceiver = new Thread(this::receiveMessage);
-			messageReceiver.setDaemon(true);
-			messageReceiver.start();
-			onConnect();
+		this.socket = new Socket(ip, port);
+		this.socketWriter = new ObjectOutputStream(new DataOutputStream(socket.getOutputStream()));
+		this.socketReader = new ObjectInputStream(new DataInputStream(socket.getInputStream()));
+		messageReceiver = new Thread(this::receiveMessage);
+		messageReceiver.setDaemon(true);
+		messageReceiver.start();
+		connected = true;
+		onConnect();
 	}
 	
 	public void sendMessage(Message<?, ?> message) {
 		try {
-			if(socket.isClosed()) {
-				return;
+			synchronized (socket) {
+				if(socket.isClosed()) {
+					return;
+				}
+				
+				socketWriter.writeObject(message);
+				socketWriter.flush();
 			}
-			
-			socketWriter.writeObject(message);
-			socketWriter.flush();
 		} catch(IOException exc) {
 			exc.printStackTrace();
 			disconnect(true);
@@ -50,6 +55,8 @@ public abstract class Client {
 				Message<?, ?> message = (Message<?, ?>) socketReader.readObject();
 				onMessageReceived(message);
 			}
+		} catch(EOFException exc) {
+			disconnect(false);
 		} catch(IOException exc) {
 			disconnect(true);
 		} catch(ClassNotFoundException exc) {
@@ -59,19 +66,29 @@ public abstract class Client {
 	
 	private void disconnect(boolean byError) {
 		try {
-			if(socketWriter != null) {
-				socketWriter.close();
+			synchronized (socket) {
+				// stop threads
+				messageReceiver.interrupt();
+				if(socketWriter != null) {
+					socketWriter.close();
+				}
+				if(socketReader != null) {
+					socketReader.close();
+				}
+				if(socket != null) {
+					socket.close();
+				}
+				connected = false;
+				onDisconnect(byError);
 			}
-			if(socketReader != null) {
-				socketReader.close();
-			}
-			if(socket != null) {
-				socket.close();
-			}
-			onDisconnect(byError);
 		} catch(IOException exc) {
-			System.out.println("error while closing");
+			System.out.println("error while closing socket");
 		}
+		
+	}
+	
+	public boolean isConnected() {
+		return connected;
 	}
 	
 	public void disconnect() {

@@ -17,8 +17,17 @@ public class ServerExample extends Server {
 	
 	public static void main(String[] args) {
 		try {
+			// create the server on port 50000
 			ServerExample server = new ServerExample(50000);
+			// and start it
 			server.start();
+			// server stays up for 60 seconds
+			try {
+				Thread.sleep(10000);
+			} catch(InterruptedException ignore) {}
+			// shut down server
+			server.shutdown();
+			
 		} catch(IOException exc) {
 			System.out.println("couldn't instanciate server");
 			System.err.println(exc.getMessage());
@@ -26,19 +35,20 @@ public class ServerExample extends Server {
 	}
 	
 	@Override
-	public void onMessageReceived(MessageToSend message) {
-		if(names.get(message.sender) == null) {
-			String newName = (String) message.message.content;
-			names.put(message.sender, newName);
-			System.out.printf("assigned name %s to %s%n", newName, message.sender);
+	public void onMessageReceived(Message<?, ?> message, Connection sender) {
+		if(names.get(sender) == null) {
+			String newName = (String) message.content;
+			names.put(sender, newName);
+			System.out.printf("assigned name %s to %s%n", newName, sender);
+			broadcastMessage(new MessageToSend(new Message<>(MessageType.TEXT, newName + " has joined"), sender));
 			return;
 		}
 		
-		String sendingMessage = String.format("%s: %s", names.get(message.sender), message.message.content);
+		String sendingMessage = String.format("%s: %s", names.get(sender), message.content);
 		
 		System.out.println(sendingMessage);
 		
-		broadcastMessage(new MessageToSend(new Message<>(MessageType.TEXT, sendingMessage), message.sender));
+		broadcastMessage(new MessageToSend(new Message<>(MessageType.TEXT, sendingMessage), sender));
 	}
 
 	@Override

@@ -69,9 +69,15 @@ public class Connection implements Runnable {
 	public void disconnect() {
 		if(!socket.isClosed()) {
 			try {
-				socketWriter.close();
-				socketReader.close();
-				socket.close();
+				if(socketWriter != null) {
+					socketWriter.close();
+				}
+				if(socketReader != null) {
+					socketReader.close();
+				}
+				if(socket != null) {
+					socket.close();
+				}
 			} catch(IOException exc) {
 				System.err.println("error while closing");
 				exc.printStackTrace();

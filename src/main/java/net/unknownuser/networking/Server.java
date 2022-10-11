@@ -129,7 +129,7 @@ public abstract class Server {
 	 */
 	private void waitForMessages() {
 		try {
-			while(!socket.isClosed()) {
+			while(isRunning()) {
 				MessageToSend message = messagesToSend.take();
 				if(message != null) {
 					onMessageReceived(message.message, message.sender);
@@ -161,7 +161,7 @@ public abstract class Server {
 	 * {@link #acceptConnection(Connection) acceptConnection}, is added to it's connected clients.
 	 */
 	private void waitForNewConnections() {
-		while(!socket.isClosed()) {
+		while(isRunning()) {
 			try {
 				Socket connection = socket.accept();
 				if(connection != null) {
@@ -266,6 +266,6 @@ public abstract class Server {
 	
 	@Override
 	public String toString() {
-		return "Server{socketStatus=" + !socket.isClosed() + ", port=" + socket.getLocalPort() + ", connectedClients=" + connectedClients.size() + ", messagesToSend=" + messagesToSend.size() + "}";
+		return "Server{socketStatus=" + isRunning() + ", port=" + socket.getLocalPort() + ", connectedClients=" + connectedClients.size() + ", messagesToSend=" + messagesToSend.size() + "}";
 	}
 }

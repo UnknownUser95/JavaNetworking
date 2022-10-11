@@ -88,7 +88,7 @@ public class Connection implements Runnable {
 	/**
 	 * Gets the InetAddress of this connection.
 	 * 
-	 * @return
+	 * @return The InetAdress of this connection.
 	 */
 	public InetAddress getAddress() {
 		return socket.getInetAddress();

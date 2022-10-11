@@ -23,7 +23,7 @@ public class ServerExample extends Server {
 			server.start();
 			// server stays up for 60 seconds
 			try {
-				Thread.sleep(60000);
+				Thread.sleep(10000);
 			} catch(InterruptedException ignore) {}
 			// shut down server
 			server.shutdown();

@@ -52,13 +52,15 @@ public class Connection implements Runnable {
 	 * @param message The message to send.
 	 */
 	public void sendMessage(Message<?, ?> message) {
-		try {
-			socketWriter.writeObject(message);
-			socketWriter.flush();
-		} catch(IOException exc) {
-			System.out.println("error while sending message");
-			System.out.println(exc.getMessage());
-			server.removeConnection(this);
+		synchronized (socket) {
+			try {
+				socketWriter.writeObject(message);
+				socketWriter.flush();
+			} catch(IOException exc) {
+				System.out.println("error while sending message");
+				System.out.println(exc.getMessage());
+				server.removeConnection(this);
+			}
 		}
 	}
 	
@@ -68,19 +70,21 @@ public class Connection implements Runnable {
 	 */
 	public void disconnect() {
 		if(!socket.isClosed()) {
-			try {
-				if(socketWriter != null) {
-					socketWriter.close();
+			synchronized (socket) {
+				try {
+					if(socketWriter != null) {
+						socketWriter.close();
+					}
+					if(socketReader != null) {
+						socketReader.close();
+					}
+					if(socket != null) {
+						socket.close();
+					}
+				} catch(IOException exc) {
+					System.err.println("error while closing");
+					exc.printStackTrace();
 				}
-				if(socketReader != null) {
-					socketReader.close();
-				}
-				if(socket != null) {
-					socket.close();
-				}
-			} catch(IOException exc) {
-				System.err.println("error while closing");
-				exc.printStackTrace();
 			}
 		}
 	}

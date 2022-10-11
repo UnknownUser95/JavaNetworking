@@ -18,4 +18,4 @@ public class Message<T extends Enum<T>, C extends Serializable> implements Seria
 		this.type = type;
 		this.content = content;
 	}
-}	
+}

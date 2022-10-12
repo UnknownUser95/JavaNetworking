@@ -59,7 +59,8 @@ public class ServerExample extends Server {
 
 	@Override
 	public void onClientDisconnected(Connection client) {
-		names.remove(client);
+		broadcastMessage(new MessageToSend(new Message<>(MessageType.TEXT, names.get(client) + " has left"), client));
 		System.out.printf("client (%s:%d) disconnected%n", client.getIP(), client.getPort());
+		names.remove(client);
 	}
 }

@@ -52,7 +52,7 @@ public class Connection implements Runnable {
 	 * @param message The message to send.
 	 */
 	public void sendMessage(Message<?, ?> message) {
-		synchronized (socket) {
+		synchronized (this) {
 			try {
 				socketWriter.writeObject(message);
 				socketWriter.flush();
@@ -69,8 +69,8 @@ public class Connection implements Runnable {
 	 * Do not use this instance after this method has been called.
 	 */
 	public void disconnect() {
-		if(!socket.isClosed()) {
-			synchronized (socket) {
+		synchronized (this) {
+			if(!socket.isClosed()) {
 				try {
 					if(socketWriter != null) {
 						socketWriter.close();

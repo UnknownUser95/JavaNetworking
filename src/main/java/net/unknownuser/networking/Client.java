@@ -110,6 +110,10 @@ public abstract class Client {
 	 * @param message The message to send.
 	 */
 	public void sendMessage(Message<?, ?> message) {
+		if(!isConnected()) {
+			return;
+		}
+		
 		try {
 			// socket must be under control
 			synchronized (socket) {

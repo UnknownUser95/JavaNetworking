@@ -147,6 +147,10 @@ public abstract class Server {
 	 *                sends it to everyone).
 	 */
 	public synchronized void broadcastMessage(MessageToSend message) {
+		if(!isRunning()) {
+			return;
+		}
+		
 		for(Connection conn : connectedClients) {
 			if(conn.equals(message.sender)) {
 				continue;

@@ -1,4 +1,4 @@
-package net.unknownuser.networking.examples;
+package net.unknownuser.networking.example;
 
 import java.io.*;
 

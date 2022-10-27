@@ -62,6 +62,7 @@ public abstract class Server {
 	 */
 	public synchronized void start() throws IOException {
 		if(isRunning()) {
+			System.err.println("could not start, server is already running");
 			return;
 		}
 		
@@ -82,6 +83,7 @@ public abstract class Server {
 	 */
 	public synchronized void shutdown() throws IOException {
 		if(!isRunning()) {
+			System.err.println("could not shutdown, server is already shut down");
 			return;
 		}
 		
@@ -148,6 +150,7 @@ public abstract class Server {
 	 */
 	public synchronized void broadcastMessage(MessageToSend message) {
 		if(!isRunning()) {
+			System.err.println("could not broadcast message, server is not running");
 			return;
 		}
 		
@@ -235,6 +238,7 @@ public abstract class Server {
 		// can only be changed when entire server is controlled
 		synchronized (this) {
 			if(isRunning()) {
+				System.err.println("could not change port, server is running");
 				return false;
 			} else {
 				port = newPort;

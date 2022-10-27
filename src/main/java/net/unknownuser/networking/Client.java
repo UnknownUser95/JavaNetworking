@@ -24,8 +24,7 @@ public abstract class Client {
 	}
 	
 	/**
-	 * Whenever a message is received from the server, this method is called with the received
-	 * message.
+	 * Whenever a message is received from the server, this method is called with the received message.
 	 * 
 	 * @param message The received message.
 	 */
@@ -41,8 +40,14 @@ public abstract class Client {
 	 */
 	public abstract void onDisconnect(boolean withError);
 	
+	/**
+	 * Connects the client to the specified IP and port.
+	 * 
+	 * @throws IOException Any exception during connecting.
+	 */
 	public void connect() throws IOException {
 		if(isConnected()) {
+			System.err.println("could not connect, client is already connected");
 			return;
 		}
 		
@@ -70,6 +75,7 @@ public abstract class Client {
 	 */
 	private synchronized void disconnect(boolean byError) {
 		if(!isConnected()) {
+			System.err.println("could not disconnect, client is already disconnected");
 			return;
 		}
 		
@@ -111,6 +117,7 @@ public abstract class Client {
 	 */
 	public void sendMessage(Message<?, ?> message) {
 		if(!isConnected()) {
+			System.err.println("could not send message, client is disconnected");
 			return;
 		}
 		
@@ -189,8 +196,7 @@ public abstract class Client {
 	}
 	
 	/**
-	 * Changes the server this client uses to the given one. This only has an effect, if the client
-	 * isn't already connected to a server.
+	 * Changes the server this client uses to the given one. This only has an effect, if the client isn't already connected to a server.
 	 * 
 	 * @param newIP The IP of the new server.
 	 * @return {@code true} if the servers' IP could be changed, {@code false} otherwise.
@@ -202,6 +208,7 @@ public abstract class Client {
 				ip = newIP;
 				return true;
 			} else {
+				System.err.println("could not change IP, client is connected");
 				return false;
 			}
 		}
@@ -217,8 +224,7 @@ public abstract class Client {
 	}
 	
 	/**
-	 * Changes the port this client uses to the given one. This only has an effect, if the client
-	 * isn't already connected to a server.
+	 * Changes the port this client uses to the given one. This only has an effect, if the client isn't already connected to a server.
 	 * 
 	 * @param newPort The port of the new server.
 	 * @return {@code true} if the port could be changed, {@code false} otherwise.
@@ -230,6 +236,7 @@ public abstract class Client {
 				port = newPort;
 				return true;
 			} else {
+				System.err.println("could not change port, client is connected");
 				return false;
 			}
 		}

@@ -5,6 +5,5 @@ public enum MessageType {
 	BOARD_SYNC,
 	MOVE,
 	SET_COLOUR,
-	REQUEST_ACCEPTED,
-	REQUEST_DENIED
+	REQUEST_ID,
 }

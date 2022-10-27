@@ -1,5 +1,7 @@
 package net.unknownuser.networking.game;
 
+import java.util.concurrent.locks.*;
+
 import org.eclipse.swt.*;
 import org.eclipse.swt.events.*;
 import org.eclipse.swt.graphics.*;
@@ -18,13 +20,15 @@ public class GameClient extends Client {
 	public static final RGB FIELD_BACKGROUND = new RGB(255, 255, 255);
 	public static final RGB FIELD_FOREGROUND = new RGB(0, 0, 0);
 	
-	private static final Board board = new Board(20, 15);
-	private static Field playerField = new Field(0, 0);
-	private static Point playerPosition = new Point(0, 0);
+	private final Board board = new Board(20, 15);
+	private int playerID = -1;
 	
 	protected Shell shell;
 	private Text textChatInput;
 	private List chatMessageList;
+	
+	private Lock lock = new ReentrantLock();
+	private Condition idIsSet = lock.newCondition();
 	
 	/**
 	 * Launch the game.
@@ -33,7 +37,13 @@ public class GameClient extends Client {
 	 */
 	public static void main(String[] args) {
 		GameClient client = new GameClient("127.0.0.1", 50000);
-		client.open();
+//		try {
+//			client.connect(); // -> TODO: make online
+			client.open();
+//		} catch(IOException exc) {
+//			System.err.println("could not connect to server");
+//			System.err.println(exc.getMessage());
+//		}
 	}
 	
 	/**
@@ -53,12 +63,35 @@ public class GameClient extends Client {
 		}
 	}
 	
+	public synchronized void requestID() {
+		if(playerID != -1) {
+			return;
+		}
+		
+		sendMessage(new Message<>(MessageType.REQUEST_ID, ""));
+		// wait for response
+		while(playerID == -1) {
+			try {
+				lock.lock();
+				System.out.println("getting ID from server");
+				idIsSet.await();
+				System.out.println("ID set to " + playerID);
+				lock.unlock();
+			} catch(InterruptedException e1) {
+				e1.printStackTrace();
+			}
+		}
+	}
+	
 	/**
 	 * Create contents of the window.
 	 */
 	protected void createContents() {
-		board.addField(playerField, playerPosition.x, playerPosition.y);
-		playerField.setColour(255, 0, 0);
+		if(playerID == -1) {
+			requestID();
+		}
+		board.getField(0, 0).setColour(255, 0, 0);
+		board.addPlayer(playerID, new Point(0, 0));
 		
 		shell = new Shell();
 		shell.setText("Multiplayer Game");
@@ -81,7 +114,6 @@ public class GameClient extends Client {
 					gc.setForeground(new Color(FIELD_FOREGROUND));
 					gc.fillRectangle(new Rectangle(x * FIELD_SIZE, y * FIELD_SIZE, FIELD_SIZE, FIELD_SIZE));
 					gc.drawRectangle(new Rectangle(x * FIELD_SIZE, y * FIELD_SIZE, FIELD_SIZE, FIELD_SIZE));
-					gc.drawString(field.getSymbol(), x * FIELD_SIZE + 20, y * FIELD_SIZE + 16);
 				}
 			}
 		});
@@ -109,10 +141,7 @@ public class GameClient extends Client {
 					return;
 				}
 				
-				if(board.moveField(playerPosition.x, playerPosition.y, direction)) {
-					// update player position
-					playerPosition.x += direction.x;
-					playerPosition.y += direction.y;
+				if(board.movePlayer(playerID, direction)) {
 					// redraw
 					async(canvas::redraw);
 				} else {
@@ -237,13 +266,21 @@ public class GameClient extends Client {
 	public void onMessageReceived(Message<?, ?> message) {
 		switch((MessageType) message.type) {
 		case CHAT_MESSAGE -> chatMessageList.add((String) message.content);
+		case REQUEST_ID -> {
+			playerID = (int) message.content;
+			idIsSet.signal();
+		}
 		default -> {
+			System.out.print("unknown or unhandled message type: ");
+			System.out.println(message.type);
 		}
 		}
 	}
 	
 	@Override
-	public void onConnect() {}
+	public void onConnect() {
+		requestID();
+	}
 	
 	@Override
 	public void onDisconnect(boolean withError) {}

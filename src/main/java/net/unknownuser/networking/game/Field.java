@@ -5,32 +5,37 @@ import java.util.function.*;
 import org.eclipse.swt.graphics.*;
 
 public class Field {
-	private String symbol = " ";
 	private int red = 255;
 	private int green = 255;
 	private int blue = 255;
 	
-	public Field(int x, int y, String symbol) {
+	public Field(int red, int green, int blue) {
 		super();
-		this.symbol = symbol;
+		this.red = red;
+		this.green = green;
+		this.blue = blue;
 	}
 	
-	public Field(int x, int y) {
+	public Field() {
 		super();
 	}
 
-	public String getSymbol() {
-		return symbol;
-	}
-
-	public void setSymbol(String symbol) {
-		this.symbol = symbol;
-	}
-	
 	public RGB getColour() {
 		return new RGB(red, green, blue);
 	}
 	
+	public int getRed() {
+		return red;
+	}
+
+	public int getGreen() {
+		return green;
+	}
+
+	public int getBlue() {
+		return blue;
+	}
+
 	public void setColour(int red, int green, int blue) {
 		IntPredicate is8Bit = num -> num >= 0 && num <= 255;
 		if(is8Bit.test(red) && is8Bit.test(green) && is8Bit.test(blue)) {
@@ -42,6 +47,6 @@ public class Field {
 
 	@Override
 	public String toString() {
-		return "Field [symbol=" + symbol + ", red=" + red + ", green=" + green + ", blue=" + blue + "]";
+		return "Field [red=" + red + ", green=" + green + ", blue=" + blue + "]";
 	}
 }

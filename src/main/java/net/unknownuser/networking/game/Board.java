@@ -1,11 +1,15 @@
 package net.unknownuser.networking.game;
 
+import java.util.*;
+
 import org.eclipse.swt.graphics.*;
 
 public class Board {
 	public final int width;
 	public final int height;
 	public final Field[][] fields;
+	
+	public final HashMap<Integer, Point> playerPosition = new HashMap<>();
 	
 	public Board(int width, int height) {
 		super();
@@ -14,17 +18,17 @@ public class Board {
 		fields = generateEmptyBoard(height, width);
 	}
 
-	public boolean swapFields(int x1, int y1, int x2, int y2) {
-		if(!(isInbounds(new Point(x1, y1)) && isInbounds(new Point(x2, y2)))) {
+	public boolean swapFields(Point p1, Point p2) {
+		if(!(isInbounds(p1) && isInbounds(p2))) {
 			return false;
 		}
 		// get fields
-		Field f1 = getField(x1, y1);
-		Field f2 = getField(x2, y2);
+		Field f1 = getField(p1.x, p1.y);
+		Field f2 = getField(p2.x, p2.y);
 		
 		// assign in board position
-		fields[x1][y1] = f2;
-		fields[x2][y2] = f1;
+		fields[p1.x][p1.y] = f2;
+		fields[p2.x][p2.y] = f1;
 		
 		return true;
 	}
@@ -33,12 +37,33 @@ public class Board {
 		return fields[x][y];
 	}
 	
+	public void addPlayer(int id, Point position) {
+		playerPosition.put(id, position);
+	}
+	
 	public void addField(Field newField, int x, int y) {
 		fields[x][y] = newField;
 	}
 	
-	public boolean moveField(int x, int y, MoveDirection direction) {
-		return swapFields(x, y, x + direction.x, y + direction.y);
+	public boolean moveField(Point p, MoveDirection direction) {
+		return swapFields(p, new Point(p.x + direction.x, p.y + direction.y));
+	}
+	
+	public boolean movePlayer(int playerID, MoveDirection direction) {
+		Point pos = playerPosition.get(playerID);
+		// no position for player or out of bounds move
+		if(pos == null || !isInbounds(new Point(pos.x + direction.x, pos.y + direction.y))) {
+			return false;
+		}
+		
+		// swap fields
+		swapFields(pos, new Point(pos.x + direction.x, pos.y + direction.y));
+		
+		// update location in map
+		pos.x += direction.x;
+		pos.y += direction.y;
+		
+		return true;
 	}
 	
 	public static Field[][] generateEmptyBoard(int height, int width) {
@@ -51,7 +76,7 @@ public class Board {
 		Field[][] board = new Field[width][height];
 		for(int x = 0; x < width; x++) {
 			for(int y = 0; y < height; y++) {
-				board[x][y] = new Field(x, y);
+				board[x][y] = new Field();
 			}
 		}
 		

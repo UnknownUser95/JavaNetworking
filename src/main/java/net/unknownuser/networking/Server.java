@@ -21,16 +21,14 @@ public abstract class Server {
 	}
 	
 	/**
-	 * Whenever a message is received from a client, this method is called with the received message
-	 * and the connection of the sender.
+	 * Whenever a message is received from a client, this method is called with the received message and the connection of the sender.
 	 * 
 	 * @param message The received message. Note that the message doesn't have any generic types.
 	 * @param sender  The connection of the sender.
 	 */
 	public abstract void onMessageReceived(Message<?, ?> message, Connection sender);
 	/**
-	 * This method is called whenever a client connects to this server. The connect, the connection
-	 * has to pass the {@link #acceptConnection(Connection) acceptConnection} check.
+	 * This method is called whenever a client connects to this server. The connect, the connection has to pass the {@link #acceptConnection(Connection) acceptConnection} check.
 	 * 
 	 * @param client The newly connected client.
 	 */
@@ -44,12 +42,11 @@ public abstract class Server {
 	
 	/**
 	 * Whether the connection should be accepted or not.<br>
-	 * Return {@code true} means the server will accept the connection, {@code false} means it will
-	 * reject it.
+	 * Return {@code true} means the server will accept the connection, {@code false} means it will reject it.
 	 * 
 	 * @param connection The inbound connection.
-	 * @return {@code true} if the connection should be accepted, {@code false} if it should be
-	 *         rejected.
+	 * 
+	 * @return {@code true} if the connection should be accepted, {@code false} if it should be rejected.
 	 */
 	protected boolean acceptConnection(Connection connection) {
 		return true;
@@ -60,31 +57,35 @@ public abstract class Server {
 	 * 
 	 * @throws IOException The exception when an error occurs while starting the server.
 	 */
-	public synchronized void start() throws IOException {
+	public synchronized boolean start() throws IOException {
 		if(isRunning()) {
-			System.err.println("could not start, server is already running");
-			return;
+			return false;
 		}
 		
 		synchronized (this) {
+			System.out.print("starting...\r");
+			
 			this.socket = new ServerSocket(port);
 			connectionAccepter = new Thread(this::waitForNewConnections, "waitForNewConnections");
 			connectionAccepter.start();
 			messageListener = new Thread(this::waitForMessages, "waitForMessages");
 			messageListener.start();
+			
 			System.out.printf("server at port %d started%n", getPort());
 		}
+		return true;
 	}
 	
 	/**
 	 * Shutdowns this server. Calling it after the server has been shut down doesn't do anything.
 	 * 
+	 * @return {@code true} if the server has been successfully shut down, {@code false} otherwise.
+	 * 
 	 * @throws IOException The exception, when an error occurs during shutdown.
 	 */
-	public synchronized void shutdown() throws IOException {
+	public synchronized boolean shutdown() throws IOException {
 		if(!isRunning()) {
-			System.err.println("could not shutdown, server is already shut down");
-			return;
+			return false;
 		}
 		
 		synchronized (this) {
@@ -108,6 +109,7 @@ public abstract class Server {
 				throw exc;
 			}
 		}
+		return true;
 	}
 	
 	/**
@@ -121,6 +123,8 @@ public abstract class Server {
 	 * Adds a message to the message queue.
 	 * 
 	 * @param message The message to add to the queue.
+	 * 
+	 * @return {@code true} if the message could be added to the queue, {@code false} otherwise.
 	 */
 	public boolean addMessageToQueue(MessageToSend message) {
 		return messagesToSend.offer(message);
@@ -145,13 +149,13 @@ public abstract class Server {
 	/**
 	 * Sends a message to all connected clients.
 	 * 
-	 * @param message The message to send, excluding the sender. (using {@code null} as the sender,
-	 *                sends it to everyone).
+	 * @param message The message to send, excluding the sender. (using {@code null} as the sender, sends it to everyone).
+	 * 
+	 * @return {@code true} if the message could be broadcasted, {@code false} otherwise.
 	 */
-	public synchronized void broadcastMessage(MessageToSend message) {
+	public synchronized boolean broadcastMessage(MessageToSend message) {
 		if(!isRunning()) {
-			System.err.println("could not broadcast message, server is not running");
-			return;
+			return false;
 		}
 		
 		for(Connection conn : connectedClients) {
@@ -161,11 +165,11 @@ public abstract class Server {
 			
 			conn.sendMessage(message.message);
 		}
+		return true;
 	}
 	
 	/**
-	 * Waits for a new connection and, if the connection is accepted via
-	 * {@link #acceptConnection(Connection) acceptConnection}, is added to it's connected clients.
+	 * Waits for a new connection and, if the connection is accepted via {@link #acceptConnection(Connection) acceptConnection}, is added to it's connected clients.
 	 */
 	private void waitForNewConnections() {
 		while(isRunning()) {
@@ -186,27 +190,30 @@ public abstract class Server {
 				}
 			} catch(IOException exc) {
 				if(!(exc instanceof SocketException && exc.getMessage().equals("Socket closed"))) {
+					// no idea what can cause this
 					System.out.println("[Server][Warning] error during connection accepting");
 					exc.printStackTrace();
-					// no idea what can cause this
 				}
 			}
 		}
 	}
 	
 	/**
-	 * Removes the given connection from this server. Calls the {@link Connection#disconnect()
-	 * disconnect} method of the connection.
+	 * Removes the given connection from this server. Calls the {@link Connection#disconnect() disconnect} method of the connection.
 	 * 
 	 * @param conn The connection to remove.
+	 * 
+	 * @return {@code true} if the connection has been closed and removed, {@code false} otherwise.
 	 */
-	protected void removeConnection(Connection conn) {
+	protected boolean removeConnection(Connection conn) {
 		if(connectedClients.contains(conn)) {
 			conn.disconnect();
 			connectedClients.remove(conn);
 			onClientDisconnected(conn);
+			return true;
 		} else {
-			System.out.printf("[Server][Warning] connection (%s) is not a connected client%n", conn);
+			System.out.printf("[Server][Warning] connection (%s) is not a connected client%n", conn.toStringWithoutServer());
+			return false;
 		}
 	}
 	
@@ -232,18 +239,18 @@ public abstract class Server {
 	 * Changes the port of this server. It can only be changed, if the server is shut down.
 	 * 
 	 * @param newPort The new port of this server.
+	 * 
 	 * @return {@code true} if the port has been changed, {@code false} if no change has been made.
 	 */
 	public boolean setPort(int newPort) {
 		// can only be changed when entire server is controlled
 		synchronized (this) {
 			if(isRunning()) {
-				System.err.println("could not change port, server is running");
 				return false;
 			} else {
 				port = newPort;
 				return true;
-			}			
+			}
 		}
 	}
 	
@@ -267,7 +274,7 @@ public abstract class Server {
 		}
 		
 		if(obj instanceof Server server) {
-			return socket.equals(server.socket);
+			return socket.getLocalPort() == server.socket.getLocalPort() && isRunning() == server.isRunning();
 		}
 		return false;
 	}

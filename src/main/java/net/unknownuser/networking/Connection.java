@@ -40,7 +40,9 @@ public class Connection implements Runnable {
 				System.out.println("error while reading message");
 				exc.printStackTrace();
 			}
-			server.removeConnection(this);
+			if(!socket.isClosed()) {
+				server.removeConnection(this);
+			}
 		} catch(ClassNotFoundException exc) {
 			System.err.println("received object could not be mapped to a class");
 		}
@@ -72,14 +74,13 @@ public class Connection implements Runnable {
 		synchronized (this) {
 			if(!socket.isClosed()) {
 				try {
+					socket.close();
+					
 					if(socketWriter != null) {
 						socketWriter.close();
 					}
 					if(socketReader != null) {
 						socketReader.close();
-					}
-					if(socket != null) {
-						socket.close();
 					}
 				} catch(IOException exc) {
 					System.err.println("error while closing");
@@ -127,7 +128,7 @@ public class Connection implements Runnable {
 		}
 		
 		if(obj instanceof Connection conn) {
-			return socket.equals(conn.socket) && server.equals(conn.server);
+			return server.equals(conn.server) && socket.getLocalPort() == conn.socket.getLocalPort();
 		}
 		return false;
 	}

@@ -37,8 +37,19 @@ public class Board {
 		return fields[x][y];
 	}
 	
+	public Field getField(Point point) {
+		return getField(point.x, point.y);
+	}
+	
 	public void addPlayer(int id, Point position) {
 		playerPosition.put(id, position);
+	}
+	
+	public void removePlayer(int id) {
+		
+		getField(playerPosition.get(id)).setColour(255, 255, 255);
+		
+		playerPosition.remove(id);		
 	}
 	
 	public void addField(Field newField, int x, int y) {

@@ -88,7 +88,7 @@ public class GameClient extends Client {
 	 */
 	protected void createContents() {
 		if(playerID == -1) {
-			requestID();
+//			requestID();
 		}
 		board.getField(0, 0).setColour(255, 0, 0);
 		board.addPlayer(playerID, new Point(0, 0));

@@ -43,12 +43,13 @@ public abstract class Client {
 	/**
 	 * Connects the client to the specified IP and port.
 	 * 
+	 * @return {@code true} if a connection could be made, {@code false} otherwise.
+	 * 
 	 * @throws IOException Any exception during connecting.
 	 */
-	public void connect() throws IOException {
+	public boolean connect() throws IOException {
 		if(isConnected()) {
-			System.err.println("could not connect, client is already connected");
-			return;
+			return false;
 		}
 		
 		synchronized (this) {
@@ -66,17 +67,19 @@ public abstract class Client {
 			
 			onConnect();
 		}
+		return true;
 	}
 	
 	/**
 	 * Disconnects the client from the server.
 	 * 
 	 * @param byError Whether the disconnect is caused by an error.
+	 * 
+	 * @return {@code true} if a disconnect was possible, {@code false} otherwise.
 	 */
-	private synchronized void disconnect(boolean byError) {
+	protected synchronized boolean disconnect(boolean byError) {
 		if(!isConnected()) {
-			System.err.println("could not disconnect, client is already disconnected");
-			return;
+			return false;
 		}
 		
 		try {
@@ -86,21 +89,23 @@ public abstract class Client {
 					messageReceiver.interrupt();
 					messageListener.interrupt();
 					
+					socket.close();
+					
 					if(socketWriter != null) {
 						socketWriter.close();
 					}
 					if(socketReader != null) {
 						socketReader.close();
 					}
-					if(socket != null) {
-						socket.close();
-					}
 					onDisconnect(byError);
 				}
 			}
 		} catch(IOException exc) {
-			System.out.println("error during disconnect");
+			System.err.println("error during disconnect");
+			exc.printStackTrace();
+			return false;
 		}
+		return true;
 	}
 	
 	/**
@@ -114,19 +119,17 @@ public abstract class Client {
 	 * Sends a message to the connected server.
 	 * 
 	 * @param message The message to send.
+	 * 
+	 * @return {@code true} if the message could be send, {@code false} otherwise.
 	 */
-	public void sendMessage(Message<?, ?> message) {
+	public boolean sendMessage(Message<?, ?> message) {
 		if(!isConnected()) {
-			System.err.println("could not send message, client is disconnected");
-			return;
+			return false;
 		}
 		
 		try {
 			// socket must be under control
 			synchronized (socket) {
-				if(!isConnected()) {
-					return;
-				}
 				
 				socketWriter.writeObject(message);
 				socketWriter.flush();
@@ -134,28 +137,41 @@ public abstract class Client {
 		} catch(IOException exc) {
 			exc.printStackTrace();
 			disconnect(true);
+			return false;
 		}
+		return true;
 	}
 	
 	/**
 	 * Receives a message from the server. onMessageReceived} with it.
 	 */
 	private void receiveMessage() {
+		boolean isError = false;
 		try {
 			while(isConnected()) {
-				Message<?, ?> message = (Message<?, ?>) socketReader.readObject();
-				// keep this thread listening.
-				addMessageToQueue(message);
+				try {
+					Message<?, ?> message = (Message<?, ?>) socketReader.readObject();
+					// keep this thread listening.
+					addMessageToQueue(message);
+				} catch(ClassNotFoundException exc) {
+					System.err.println("received object could not be mapped to a class");
+				}
 			}
 		} catch(EOFException exc) {
-			// reader / socket was closed
+			// socket closed during read
 			// no actual error
-			disconnect(false);
+		} catch(SocketException exc) {
+			// socket closed manually or through server
+			// no actual error
+			if(!exc.getMessage().equals("Socket closed")) {
+				isError = true;
+			}
 		} catch(IOException exc) {
 			// general errors
-			disconnect(true);
-		} catch(ClassNotFoundException exc) {
-			System.err.println("received object could not be mapped to a class");
+			exc.printStackTrace();
+			isError = true;
+		} finally {
+			disconnect(isError);
 		}
 	}
 	
@@ -173,6 +189,13 @@ public abstract class Client {
 		}
 	}
 	
+	/**
+	 * Adds a message to the message list, which will be sent to the server, instead of directly sending it.
+	 * 
+	 * @param newMessage The message to send.
+	 * 
+	 * @return {@code true} if the message could be added, {@code false} otherwise.
+	 */
 	public boolean addMessageToQueue(Message<?, ?> newMessage) {
 		return receivedMessages.offer(newMessage);
 	}
@@ -199,6 +222,7 @@ public abstract class Client {
 	 * Changes the server this client uses to the given one. This only has an effect, if the client isn't already connected to a server.
 	 * 
 	 * @param newIP The IP of the new server.
+	 * 
 	 * @return {@code true} if the servers' IP could be changed, {@code false} otherwise.
 	 */
 	public boolean setServerIP(String newIP) {
@@ -208,7 +232,7 @@ public abstract class Client {
 				ip = newIP;
 				return true;
 			} else {
-				System.err.println("could not change IP, client is connected");
+				System.out.println("could not change IP, client is connected");
 				return false;
 			}
 		}
@@ -227,6 +251,7 @@ public abstract class Client {
 	 * Changes the port this client uses to the given one. This only has an effect, if the client isn't already connected to a server.
 	 * 
 	 * @param newPort The port of the new server.
+	 * 
 	 * @return {@code true} if the port could be changed, {@code false} otherwise.
 	 */
 	public boolean setPort(int newPort) {
@@ -236,7 +261,7 @@ public abstract class Client {
 				port = newPort;
 				return true;
 			} else {
-				System.err.println("could not change port, client is connected");
+				System.out.println("could not change port, client is connected");
 				return false;
 			}
 		}

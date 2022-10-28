@@ -4,6 +4,6 @@ public enum MessageType {
 	CHAT_MESSAGE,
 	BOARD_SYNC,
 	MOVE,
-	SET_COLOUR,
-	REQUEST_ID,
+	SET_ID,
+	SET_PREFERENCES
 }

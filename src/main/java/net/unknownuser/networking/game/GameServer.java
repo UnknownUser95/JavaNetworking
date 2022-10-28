@@ -3,13 +3,15 @@ package net.unknownuser.networking.game;
 import java.io.*;
 import java.util.*;
 
+import org.eclipse.swt.graphics.*;
+
 import net.unknownuser.networking.*;
 
 public class GameServer extends Server {
 	private final HashMap<Connection, Integer> connectionIDs = new HashMap<>();
 //	private final HashMap<Integer, Point> playerPositions = new HashMap<>();
-	private final HashMap<Integer, String> playerNames = new HashMap<>();
-	private int idIndex = 1; // skip 0
+	private final HashMap<Integer, Tuple<String, RGB>> playerSettings = new HashMap<>();
+	private int idIndex = 0;
 	
 	protected GameServer(int port) {
 		super(port);
@@ -20,20 +22,25 @@ public class GameServer extends Server {
 		server.start();
 	}
 	
+	@SuppressWarnings("unchecked")
 	@Override
 	public void onMessageReceived(Message<?, ?> message, Connection sender) {
-		int senderID = connectionIDs.get(sender);
+		int senderID = -1;
+		synchronized (connectionIDs) {
+			senderID = connectionIDs.get(sender);
+		}
 		switch((MessageType) message.type) {
 		case CHAT_MESSAGE -> {
-			System.out.println("broadcasting message");
-			String chatMessage = String.format("%s: %s%n", playerNames.get(senderID), message.content);
+			String chatMessage = String.format("%s: %s%n", playerSettings.get(senderID).x, message.content);
 			broadcastMessage(new MessageToSend(new Message<>(MessageType.CHAT_MESSAGE, chatMessage), sender));
 		}
-		case REQUEST_ID -> {
-			synchronized (connectionIDs) {
-				int id = idIndex++;
-				connectionIDs.put(sender, id);
-				sender.sendMessage(new Message<>(MessageType.REQUEST_ID, id));
+		case SET_PREFERENCES -> {
+			Tuple<String, RGB> playerPrefs = (Tuple<String, RGB>) message.content;
+			if(playerPrefs.x.isBlank()) {
+				System.out.println("anonymous user connected");
+				playerSettings.put(senderID, new Tuple<>("Anon", playerPrefs.y));
+			} else {
+				playerSettings.put(senderID, playerPrefs);
 			}
 		}
 		default -> System.out.println("unkown or unhandled message type " + message.type);
@@ -42,8 +49,11 @@ public class GameServer extends Server {
 	
 	@Override
 	public void onClientConnected(Connection client) {
-		connectionIDs.put(client, -1);
-		System.out.println("client connected");
+		synchronized (connectionIDs) {
+			connectionIDs.put(client, ++idIndex);
+			client.sendMessage(new Message<>(MessageType.SET_ID, idIndex));
+			System.out.println("client connected");
+		}
 	}
 	
 	@Override

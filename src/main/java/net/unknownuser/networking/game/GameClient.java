@@ -34,12 +34,48 @@ public class GameClient extends Client {
 	 */
 	public static void main(String[] args) {
 		GameClient client = new GameClient("127.0.0.1", 50000);
+		Tuple<Tuple<String, RGB>, Tuple<String, Integer>> playerPrefs = new PlayerCreator(new Shell(), SWT.NONE).open();
+		
+		Tuple<String, RGB> playerInfo = playerPrefs.x;
+		Tuple<String, Integer> serverInfo = playerPrefs.y;
+		
+		// cancelled
+		if(serverInfo.x == null) {
+			System.out.println("connection canceled by user");
+			return;
+		}
+		
+		client.setServerIP(serverInfo.x);
+		client.setPort(serverInfo.y);
+		
 		try {
 			client.connect();
+			
+			client.sendMessage(new Message<>(MessageType.SET_PREFERENCES, playerInfo));
+			
 			client.open();
 		} catch(IOException exc) {
 			System.err.println("could not connect to server");
 			System.err.println(exc.getMessage());
+		}
+	}
+	
+	private void waitForID() {
+		synchronized (board) {
+			if(playerID != -1) {
+				System.out.println("ID is " + playerID);
+				return;
+			}
+			
+			System.out.println("waiting for ID...");
+			while(playerID == -1) {
+				try {
+					board.wait();
+				} catch(InterruptedException exc) {
+					exc.printStackTrace();
+				}
+			}
+			System.out.println("set ID to " + playerID);
 		}
 	}
 	
@@ -63,33 +99,12 @@ public class GameClient extends Client {
 		}
 	}
 	
-	public void requestID() {
-		synchronized (board) {
-			if(playerID != -1) {
-				return;
-			}
-			
-			sendMessage(new Message<>(MessageType.REQUEST_ID, ""));
-			// wait for response
-			while(playerID == -1) {
-				try {
-					System.out.println("getting ID from server");
-					board.wait();
-					System.out.println("ID set to " + playerID);
-				} catch(InterruptedException e1) {
-					e1.printStackTrace();
-				}
-			}
-		}
-	}
-	
 	/**
 	 * Create contents of the window.
 	 */
 	protected void createContents() {
-		if(playerID == -1) {
-			requestID();
-		}
+		waitForID();
+		
 		board.getField(0, 0).setColour(255, 0, 0);
 		board.addPlayer(playerID, new Point(0, 0));
 		
@@ -266,7 +281,7 @@ public class GameClient extends Client {
 	public void onMessageReceived(Message<?, ?> message) {
 		switch((MessageType) message.type) {
 		case CHAT_MESSAGE -> async(() -> chatMessageList.add((String) message.content));
-		case REQUEST_ID -> {
+		case SET_ID -> {
 			playerID = (int) message.content;
 			synchronized (board) {
 				board.notifyAll();
@@ -281,7 +296,7 @@ public class GameClient extends Client {
 	
 	@Override
 	public void onConnect() {
-		requestID();
+		System.out.println("connected to server");
 	}
 	
 	@Override

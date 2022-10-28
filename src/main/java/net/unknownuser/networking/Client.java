@@ -231,12 +231,12 @@ public abstract class Client {
 	public boolean setServerIP(String newIP) {
 		// can only be changed when entire client is controlled
 		synchronized (this) {
-			if(socket.isClosed()) {
-				ip = newIP;
-				return true;
-			} else {
+			if(isConnected()) {
 				System.out.println("could not change IP, client is connected");
 				return false;
+			} else {
+				ip = newIP;
+				return true;
 			}
 		}
 	}
@@ -260,12 +260,12 @@ public abstract class Client {
 	public boolean setPort(int newPort) {
 		// can only be changed when entire client is controlled
 		synchronized (this) {
-			if(socket.isClosed()) {
-				port = newPort;
-				return true;
-			} else {
+			if(isConnected()) {
 				System.out.println("could not change port, client is connected");
 				return false;
+			} else {
+				port = newPort;
+				return true;
 			}
 		}
 	}

@@ -49,11 +49,18 @@ public class Connection implements Runnable {
 	}
 	
 	/**
-	 * Sends a message to the connected server.
+	 * Sends a message to the connected server.<br>
+	 * Calling this method on a disconnected connection just returns {@code false}.
 	 * 
 	 * @param message The message to send.
+	 * 
+	 * @return {@code true} if the message could be send, {@code false} otherwise.
 	 */
-	public void sendMessage(Message<?, ?> message) {
+	public boolean sendMessage(Message<?, ?> message) {
+		if(socket.isClosed()) {
+			return false;
+		}
+		
 		synchronized (this) {
 			try {
 				socketWriter.writeObject(message);
@@ -62,15 +69,23 @@ public class Connection implements Runnable {
 				System.out.println("error while sending message");
 				System.out.println(exc.getMessage());
 				server.removeConnection(this);
+				return false;
 			}
 		}
+		return true;
 	}
 	
 	/**
 	 * Closes all streams. This disconnects the client.<br>
-	 * Do not use this instance after this method has been called.
+	 * <b>Do not use this instance after this method has been called.<b>
+	 * 
+	 * @return {@code true} if the connection could be disconnected, {@code false} otherwise.
 	 */
-	public void disconnect() {
+	public boolean disconnect() {
+		if(socket.isClosed()) {
+			return true;
+		}
+		
 		synchronized (this) {
 			if(!socket.isClosed()) {
 				try {
@@ -85,9 +100,11 @@ public class Connection implements Runnable {
 				} catch(IOException exc) {
 					System.err.println("error while closing");
 					exc.printStackTrace();
+					return false;
 				}
 			}
 		}
+		return true;
 	}
 	
 	/**
@@ -128,7 +145,7 @@ public class Connection implements Runnable {
 		}
 		
 		if(obj instanceof Connection conn) {
-			return server.equals(conn.server) && socket.getLocalPort() == conn.socket.getLocalPort();
+			return server.equals(conn.server) && socket.getPort() == conn.socket.getPort();
 		}
 		return false;
 	}

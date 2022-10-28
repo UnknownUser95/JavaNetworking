@@ -265,7 +265,7 @@ public class GameClient extends Client {
 	@Override
 	public void onMessageReceived(Message<?, ?> message) {
 		switch((MessageType) message.type) {
-		case CHAT_MESSAGE -> chatMessageList.add((String) message.content);
+		case CHAT_MESSAGE -> async(() -> chatMessageList.add((String) message.content));
 		case REQUEST_ID -> {
 			playerID = (int) message.content;
 			synchronized (board) {

@@ -41,7 +41,8 @@ public abstract class Client {
 	public abstract void onDisconnect(boolean withError);
 	
 	/**
-	 * Connects the client to the specified IP and port.
+	 * Connects the client to the specified IP and port.<br>
+	 * Calling this method on a connected client just returns {@code true}.
 	 * 
 	 * @return {@code true} if a connection could be made, {@code false} otherwise.
 	 * 
@@ -49,7 +50,7 @@ public abstract class Client {
 	 */
 	public boolean connect() throws IOException {
 		if(isConnected()) {
-			return false;
+			return true;
 		}
 		
 		synchronized (this) {
@@ -71,7 +72,8 @@ public abstract class Client {
 	}
 	
 	/**
-	 * Disconnects the client from the server.
+	 * Disconnects the client from the server.<br>
+	 * Calling this method on a disconnected client just returns {@code true}.
 	 * 
 	 * @param byError Whether the disconnect is caused by an error.
 	 * 
@@ -79,7 +81,7 @@ public abstract class Client {
 	 */
 	protected synchronized boolean disconnect(boolean byError) {
 		if(!isConnected()) {
-			return false;
+			return true;
 		}
 		
 		try {
@@ -116,7 +118,8 @@ public abstract class Client {
 	}
 	
 	/**
-	 * Sends a message to the connected server.
+	 * Sends a message to the connected server.<br>
+	 * Calling this method on a disconnected client just returns {@code false}.
 	 * 
 	 * @param message The message to send.
 	 * 

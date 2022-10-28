@@ -53,13 +53,16 @@ public abstract class Server {
 	}
 	
 	/**
-	 * Starts the server.
+	 * Starts the server.<br>
+	 * Calling this method on a running server just returns {@code true}.
+	 * 
+	 * @return {@code true} if the server could be started, {@code false} otherwise.
 	 * 
 	 * @throws IOException The exception when an error occurs while starting the server.
 	 */
 	public synchronized boolean start() throws IOException {
 		if(isRunning()) {
-			return false;
+			return true;
 		}
 		
 		synchronized (this) {
@@ -77,7 +80,8 @@ public abstract class Server {
 	}
 	
 	/**
-	 * Shutdowns this server. Calling it after the server has been shut down doesn't do anything.
+	 * Shutdowns this server.<br>
+	 * Calling this method on a shut down server just returns {@code true}.
 	 * 
 	 * @return {@code true} if the server has been successfully shut down, {@code false} otherwise.
 	 * 
@@ -85,7 +89,7 @@ public abstract class Server {
 	 */
 	public synchronized boolean shutdown() throws IOException {
 		if(!isRunning()) {
-			return false;
+			return true;
 		}
 		
 		synchronized (this) {
@@ -120,7 +124,7 @@ public abstract class Server {
 	}
 	
 	/**
-	 * Adds a message to the message queue.
+	 * Adds a message to the received message message queue.
 	 * 
 	 * @param message The message to add to the queue.
 	 * 
@@ -147,7 +151,8 @@ public abstract class Server {
 	}
 	
 	/**
-	 * Sends a message to all connected clients.
+	 * Sends a message to all connected clients.<br>
+	 * Calling this method on a shut down server just returns {@code false}.
 	 * 
 	 * @param message The message to send, excluding the sender. (using {@code null} as the sender, sends it to everyone).
 	 * 
@@ -157,7 +162,6 @@ public abstract class Server {
 		if(!isRunning()) {
 			return false;
 		}
-		
 		for(Connection conn : connectedClients) {
 			if(conn.equals(message.sender)) {
 				continue;
@@ -236,7 +240,8 @@ public abstract class Server {
 	}
 	
 	/**
-	 * Changes the port of this server. It can only be changed, if the server is shut down.
+	 * Changes the port of this server. It can only be changed, if the server is shut down.<br>
+	 * Calling this method on a shut down server just returns {@code false}.
 	 * 
 	 * @param newPort The new port of this server.
 	 * 

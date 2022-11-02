@@ -1,11 +1,13 @@
 package net.unknownuser.networking.game;
 
 import java.io.*;
+import java.util.*;
 
 import org.eclipse.swt.*;
 import org.eclipse.swt.events.*;
 import org.eclipse.swt.graphics.*;
 import org.eclipse.swt.widgets.*;
+import org.eclipse.swt.widgets.List;
 
 import net.unknownuser.networking.*;
 
@@ -286,6 +288,20 @@ public class GameClient extends Client {
 			synchronized (board) {
 				board.notifyAll();
 			}
+		}
+		case MOVE -> {
+			@SuppressWarnings("unchecked")
+			Tuple<Integer, MoveDirection> move = (Tuple<Integer, MoveDirection>) message.content;
+			board.movePlayer(move.x, move.y);
+		}
+		case NEW_PLAYER -> {
+			@SuppressWarnings("unchecked")
+			Tuple<Integer, Point> newPlayer = (Tuple<Integer, Point>) message.content;
+			board.addPlayer(newPlayer.x, newPlayer.y);
+		}
+		case DELETE_PLAYER -> {
+			int id = (int) message.content;
+			board.removePlayer(id);
 		}
 		default -> {
 			System.out.print("unknown or unhandled message type: ");

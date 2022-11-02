@@ -142,7 +142,12 @@ public abstract class Server {
 			while(isRunning()) {
 				MessageToSend message = messagesToSend.take();
 				if(message != null) {
-					onMessageReceived(message.message, message.sender);
+					try {
+						onMessageReceived(message.message, message.sender);
+					} catch(Exception e) {
+						System.err.println("exception during onMessageReceived");
+						e.printStackTrace();
+					}
 				}
 			}
 		} catch(InterruptedException exc) {
@@ -186,8 +191,12 @@ public abstract class Server {
 						Thread clientThread = new Thread(conn);
 						clientThread.setDaemon(true);
 						clientThread.start();
-						
-						onClientConnected(conn);
+						try {
+							onClientConnected(conn);
+						} catch(Exception e) {
+							System.err.println("exception during onClientConnected");
+							e.printStackTrace();
+						}
 					} else {
 						conn.disconnect();
 					}
@@ -213,7 +222,12 @@ public abstract class Server {
 		if(connectedClients.contains(conn)) {
 			conn.disconnect();
 			connectedClients.remove(conn);
-			onClientDisconnected(conn);
+			try {
+				onClientDisconnected(conn);
+			} catch(Exception e) {
+				System.err.println("exception during onClientDisconnected");
+				e.printStackTrace();
+			}
 			return true;
 		} else {
 			System.out.printf("[Server][Warning] connection (%s) is not a connected client%n", conn.toStringWithoutServer());

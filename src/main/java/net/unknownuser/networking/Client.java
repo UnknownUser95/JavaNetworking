@@ -66,7 +66,11 @@ public abstract class Client {
 			messageListener.setDaemon(true);
 			messageListener.start();
 			
-			onConnect();
+			try {
+				onConnect();
+			} catch(Exception e) {
+				System.err.println("exception during onConnect");
+			}
 		}
 		return true;
 	}
@@ -99,7 +103,13 @@ public abstract class Client {
 					if(socketReader != null) {
 						socketReader.close();
 					}
-					onDisconnect(byError);
+					
+					try {
+						onDisconnect(byError);
+					} catch(Exception e) {
+						System.err.println("exception during onDisconnect");
+						e.printStackTrace();
+					}
 				}
 			}
 		} catch(IOException exc) {
@@ -185,7 +195,12 @@ public abstract class Client {
 		try {
 			while(isConnected()) {
 				Message<?, ?> message = receivedMessages.take();
-				onMessageReceived(message);
+				try {
+					onMessageReceived(message);
+				} catch(Exception e) {
+					System.err.println("exception during onMessageReceived");
+					e.printStackTrace();
+				}
 			}
 		} catch(InterruptedException exc) {
 			// thrown on disconnect

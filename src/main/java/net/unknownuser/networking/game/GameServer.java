@@ -9,7 +9,7 @@ import net.unknownuser.networking.*;
 
 public class GameServer extends Server {
 	private final HashMap<Connection, Integer> connectionIDs = new HashMap<>();
-	private final HashMap<Integer, Tuple<String, RGB>> playerSettings = new HashMap<>();
+	private final HashMap<Integer, String> playerNames = new HashMap<>();
 	private int idIndex = 0;
 	
 	private static final Point DEFAULT_STARTING_POSITION = new Point(0, 0);
@@ -29,6 +29,30 @@ public class GameServer extends Server {
 		return new Point(DEFAULT_STARTING_POSITION.x, DEFAULT_STARTING_POSITION.y);
 	}
 	
+	public void synchronizePlayers() {
+		// synchronize existing players
+		if(connectionIDs.size() > 1) {
+			// synchronize already connected players
+			ArrayList<Tuple<Integer, Tuple<Point, RGB>>> colours = new ArrayList<>();
+			for(int id : connectionIDs.values()) {
+//				colours.add(new Tuple<>(id, playerSettings.get(id).y));
+				Point pos = board.getPlayerPosition(id);
+				RGB col = board.getPlayerColour(id);
+				if(pos == null || col == null) {
+					System.out.println("conf null: ");
+					System.out.println("id: " + id);
+					System.out.println("colour: " + col);
+					System.out.println("position: " + pos);
+					continue;
+				}
+				colours.add(new Tuple<>(id, new Tuple<>(pos, col)));
+			}
+			if(!colours.isEmpty()) {
+				broadcastMessage(new MessageToSend(new Message<>(MessageType.SYNC_PLAYERS, colours), null));
+			}
+		}
+	}
+	
 	@SuppressWarnings("unchecked")
 	@Override
 	public void onMessageReceived(Message<?, ?> message, Connection sender) {
@@ -38,17 +62,21 @@ public class GameServer extends Server {
 		}
 		switch((MessageType) message.type) {
 		case CHAT_MESSAGE -> {
-			String chatMessage = String.format("%s: %s%n", playerSettings.get(senderID).x, message.content);
+			String chatMessage = String.format("%s: %s%n", playerNames.get(senderID), message.content);
 			broadcastMessage(new MessageToSend(new Message<>(MessageType.CHAT_MESSAGE, chatMessage), sender));
 		}
 		case SET_PREFERENCES -> {
 			Tuple<String, RGB> playerPrefs = (Tuple<String, RGB>) message.content;
+			board.setPlayerColour(senderID, playerPrefs.y);
 			if(playerPrefs.x.isBlank()) {
 				System.out.println("anonymous user connected");
-				playerSettings.put(senderID, new Tuple<>("Anon", playerPrefs.y));
+				playerNames.put(senderID, "Anon");
 			} else {
-				playerSettings.put(senderID, playerPrefs);
+				playerNames.put(senderID, playerPrefs.x);
 			}
+			
+			synchronizePlayers();
+//			broadcastMessage(new MessageToSend(new Message<>(MessageType.SET_COLOUR, new Tuple<>(senderID, playerPrefs.y)), sender));
 		}
 		case MOVE -> {
 			MoveDirection dir = (MoveDirection) message.content;
@@ -65,8 +93,10 @@ public class GameServer extends Server {
 			connectionIDs.put(client, ++idIndex);
 			Point pos = getDefaultStartingPoint();
 			board.addPlayer(idIndex, pos);
+			
 			// give ID to new player
 			client.sendMessage(new Message<>(MessageType.SET_ID, idIndex));
+
 			// notify all other players of new player
 			broadcastMessage(new MessageToSend(new Message<>(MessageType.NEW_PLAYER, new Tuple<>(idIndex, pos)), client));
 			
@@ -84,7 +114,7 @@ public class GameServer extends Server {
 		broadcastMessage(new MessageToSend(new Message<>(MessageType.DELETE_PLAYER, senderID), client));
 		
 		// remove player from maps
-		playerSettings.remove(senderID);
+		playerNames.remove(senderID);
 		connectionIDs.remove(client);
 		
 		System.out.println("client disconnected");

@@ -8,6 +8,7 @@ import org.eclipse.swt.events.*;
 import org.eclipse.swt.graphics.*;
 import org.eclipse.swt.widgets.*;
 import org.eclipse.swt.widgets.List;
+import org.eclipse.wb.swt.*;
 
 import net.unknownuser.networking.*;
 
@@ -25,9 +26,12 @@ public class GameClient extends Client {
 	private final Board board = new Board(20, 15);
 	private int playerID = -1;
 	
+	private RGB playerColour = new RGB(255, 0, 0);
+	
 	protected Shell shell;
 	private Text textChatInput;
 	private List chatMessageList;
+	private Canvas canvas;
 	
 	/**
 	 * Launch the game.
@@ -47,11 +51,15 @@ public class GameClient extends Client {
 			return;
 		}
 		
+		client.playerColour = playerInfo.y;
+		
 		client.setServerIP(serverInfo.x);
 		client.setPort(serverInfo.y);
 		
 		try {
 			client.connect();
+			
+			client.waitForID();
 			
 			client.sendMessage(new Message<>(MessageType.SET_PREFERENCES, playerInfo));
 			
@@ -107,8 +115,7 @@ public class GameClient extends Client {
 	protected void createContents() {
 		waitForID();
 		
-		board.getField(0, 0).setColour(255, 0, 0);
-		board.addPlayer(playerID, new Point(0, 0));
+		board.addPlayer(playerID, new Point(0, 0), playerColour);
 		
 		shell = new Shell();
 		shell.setText("Multiplayer Game");
@@ -116,22 +123,34 @@ public class GameClient extends Client {
 		// -------------------- main game --------------------
 		
 		// canvas as background and main game
-		Canvas canvas = new Canvas(shell, SWT.NONE);
+		canvas = new Canvas(shell, SWT.NONE);
 		canvas.setBounds(10, 10, board.width * FIELD_SIZE, board.height * FIELD_SIZE);
 		canvas.setBackground(new Color(BOARD_BACKGROUND));
 		
 		// actually drawing the content
 		canvas.addPaintListener(arg0 -> {
 			GC gc = arg0.gc; // just a shorthand
+			gc.setForeground(SWTResourceManager.getColor(FIELD_FOREGROUND));
+			gc.setBackground(SWTResourceManager.getColor(FIELD_BACKGROUND));
+			// draw empty field
 			for(int x = 0; x < board.width; x++) {
 				for(int y = 0; y < board.height; y++) {
-					Field field = board.getField(x, y);
-					
-					gc.setBackground(new Color(field.getColour()));
-					gc.setForeground(new Color(FIELD_FOREGROUND));
 					gc.fillRectangle(new Rectangle(x * FIELD_SIZE, y * FIELD_SIZE, FIELD_SIZE, FIELD_SIZE));
 					gc.drawRectangle(new Rectangle(x * FIELD_SIZE, y * FIELD_SIZE, FIELD_SIZE, FIELD_SIZE));
 				}
+			}
+			
+			// draw players
+			for(int id : board.getPlayerIDs()) {
+				RGB colour = board.getPlayerColour(id);
+				if(colour == null) {
+					continue;
+				}
+				Point pos = board.getPlayerPosition(id);
+				
+				gc.setBackground(SWTResourceManager.getColor(colour));
+				gc.fillRectangle(new Rectangle(pos.x * FIELD_SIZE, pos.y * FIELD_SIZE, FIELD_SIZE, FIELD_SIZE));
+				gc.drawRectangle(new Rectangle(pos.x * FIELD_SIZE, pos.y * FIELD_SIZE, FIELD_SIZE, FIELD_SIZE));
 			}
 		});
 		
@@ -159,6 +178,7 @@ public class GameClient extends Client {
 				}
 				
 				if(board.movePlayer(playerID, direction)) {
+					sendMessage(new Message<>(MessageType.MOVE, direction));
 					// redraw
 					async(canvas::redraw);
 				} else {
@@ -279,8 +299,10 @@ public class GameClient extends Client {
 		Display.getDefault().asyncExec(task);
 	}
 	
+	@SuppressWarnings("unchecked")
 	@Override
 	public void onMessageReceived(Message<?, ?> message) {
+		boolean redrawCanvas = false;
 		switch((MessageType) message.type) {
 		case CHAT_MESSAGE -> async(() -> chatMessageList.add((String) message.content));
 		case SET_ID -> {
@@ -290,23 +312,43 @@ public class GameClient extends Client {
 			}
 		}
 		case MOVE -> {
-			@SuppressWarnings("unchecked")
 			Tuple<Integer, MoveDirection> move = (Tuple<Integer, MoveDirection>) message.content;
 			board.movePlayer(move.x, move.y);
+			redrawCanvas = true;
 		}
 		case NEW_PLAYER -> {
-			@SuppressWarnings("unchecked")
+			// add a new player
+			// they don't have a colour yet
 			Tuple<Integer, Point> newPlayer = (Tuple<Integer, Point>) message.content;
 			board.addPlayer(newPlayer.x, newPlayer.y);
+			redrawCanvas = true;
+		}
+		case SET_COLOUR -> {
+			// change the colour of one player
+			Tuple<Integer, RGB> idColour = (Tuple<Integer, RGB>) message.content;
+			board.setPlayerColour(idColour.x, idColour.y);
+			redrawCanvas = true;
+		}
+		case SYNC_PLAYERS -> {
+			// update player location and colours
+			ArrayList<Tuple<Integer, Tuple<Point, RGB>>> playerColours = (ArrayList<Tuple<Integer, Tuple<Point, RGB>>>) message.content;
+			// addPlayer also updates the given player, if it already exists
+			for(Tuple<Integer, Tuple<Point, RGB>> idColour : playerColours) {
+				board.addPlayer(idColour.x, idColour.y.x, idColour.y.y);
+			}
+			redrawCanvas = true;
 		}
 		case DELETE_PLAYER -> {
+			// remove a player from the game
 			int id = (int) message.content;
 			board.removePlayer(id);
+			redrawCanvas = true;
 		}
-		default -> {
-			System.out.print("unknown or unhandled message type: ");
-			System.out.println(message.type);
+		default -> System.out.println("unknown or unhandled message type: " + message.type);
 		}
+		
+		if(redrawCanvas) {
+			async(canvas::redraw);
 		}
 	}
 	

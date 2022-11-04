@@ -33,9 +33,8 @@ public class GameServer extends Server {
 		// synchronize existing players
 		if(connectionIDs.size() > 1) {
 			// synchronize already connected players
-			ArrayList<Tuple<Integer, Tuple<Point, RGB>>> colours = new ArrayList<>();
+			ArrayList<Tuple<Integer, Tuple<Point, RGB>>> config = new ArrayList<>(connectionIDs.size());
 			for(int id : connectionIDs.values()) {
-//				colours.add(new Tuple<>(id, playerSettings.get(id).y));
 				Point pos = board.getPlayerPosition(id);
 				RGB col = board.getPlayerColour(id);
 				if(pos == null || col == null) {
@@ -45,10 +44,10 @@ public class GameServer extends Server {
 					System.out.println("position: " + pos);
 					continue;
 				}
-				colours.add(new Tuple<>(id, new Tuple<>(pos, col)));
+				config.add(new Tuple<>(id, new Tuple<>(pos, col)));
 			}
-			if(!colours.isEmpty()) {
-				broadcastMessage(new MessageToSend(new Message<>(MessageType.SYNC_PLAYERS, colours), null));
+			if(!config.isEmpty()) {
+				broadcastMessage(new MessageToSend(new Message<>(MessageType.SYNC_PLAYERS, config), null));
 			}
 		}
 	}
@@ -80,9 +79,9 @@ public class GameServer extends Server {
 		case MOVE -> {
 			MoveDirection dir = (MoveDirection) message.content;
 			if(board.movePlayer(senderID, dir)) {
-				broadcastMessage(new MessageToSend(new Message<>(MessageType.MOVE, new Tuple<>(senderID, dir)), sender));
+				broadcastMessage(new MessageToSend(new Message<>(MessageType.MOVE, new Tuple<>(senderID, dir)), null));
 			} else {
-				sender.sendMessage(new Message<>(MessageType.MOVE_REJECTED, dir));
+				sender.sendMessage(new Message<>(MessageType.MOVE_REJECTED, 0));
 			}
 		}
 		default -> System.out.println("unkown or unhandled message type " + message.type);

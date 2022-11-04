@@ -76,12 +76,14 @@ public class GameServer extends Server {
 			}
 			
 			synchronizePlayers();
-//			broadcastMessage(new MessageToSend(new Message<>(MessageType.SET_COLOUR, new Tuple<>(senderID, playerPrefs.y)), sender));
 		}
 		case MOVE -> {
 			MoveDirection dir = (MoveDirection) message.content;
-			board.movePlayer(senderID, dir);
-			broadcastMessage(new MessageToSend(new Message<>(MessageType.MOVE, new Tuple<>(senderID, dir)), sender));
+			if(board.movePlayer(senderID, dir)) {
+				broadcastMessage(new MessageToSend(new Message<>(MessageType.MOVE, new Tuple<>(senderID, dir)), sender));
+			} else {
+				sender.sendMessage(new Message<>(MessageType.MOVE_REJECTED, dir));
+			}
 		}
 		default -> System.out.println("unkown or unhandled message type " + message.type);
 		}

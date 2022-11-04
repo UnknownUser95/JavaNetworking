@@ -316,6 +316,10 @@ public class GameClient extends Client {
 			board.movePlayer(move.x, move.y);
 			redrawCanvas = true;
 		}
+		case MOVE_REJECTED -> {
+			MoveDirection dir = (MoveDirection) message.content;
+			board.movePlayer(playerID, dir);
+		}
 		case NEW_PLAYER -> {
 			// add a new player
 			// they don't have a colour yet

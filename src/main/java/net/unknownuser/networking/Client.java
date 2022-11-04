@@ -66,11 +66,7 @@ public abstract class Client {
 			messageListener.setDaemon(true);
 			messageListener.start();
 			
-			try {
-				onConnect();
-			} catch(Exception e) {
-				System.err.println("exception during onConnect");
-			}
+			new Thread(this::onConnect, "onConnect").start();
 		}
 		return true;
 	}
@@ -104,12 +100,7 @@ public abstract class Client {
 						socketReader.close();
 					}
 					
-					try {
-						onDisconnect(byError);
-					} catch(Exception e) {
-						System.err.println("exception during onDisconnect");
-						e.printStackTrace();
-					}
+					new Thread(() -> onDisconnect(byError), "onDisconnect").start();
 				}
 			}
 		} catch(IOException exc) {
@@ -195,12 +186,7 @@ public abstract class Client {
 		try {
 			while(isConnected()) {
 				Message<?, ?> message = receivedMessages.take();
-				try {
-					onMessageReceived(message);
-				} catch(Exception e) {
-					System.err.println("exception during onMessageReceived");
-					e.printStackTrace();
-				}
+				new Thread(() -> onMessageReceived(message), "onMessageReceived").start();
 			}
 		} catch(InterruptedException exc) {
 			// thrown on disconnect
@@ -208,9 +194,9 @@ public abstract class Client {
 	}
 	
 	/**
-	 * Adds a message to the message list, which will be sent to the server, instead of directly sending it.
+	 * Adds a message to the message list, which have been received from server.
 	 * 
-	 * @param newMessage The message to send.
+	 * @param newMessage The message, which has been received.
 	 * 
 	 * @return {@code true} if the message could be added, {@code false} otherwise.
 	 */

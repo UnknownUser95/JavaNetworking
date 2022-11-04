@@ -142,12 +142,7 @@ public abstract class Server {
 			while(isRunning()) {
 				MessageToSend message = messagesToSend.take();
 				if(message != null) {
-					try {
-						onMessageReceived(message.message, message.sender);
-					} catch(Exception e) {
-						System.err.println("exception during onMessageReceived");
-						e.printStackTrace();
-					}
+					new Thread(() -> onMessageReceived(message.message, message.sender), "onMessageReceived").start();;
 				}
 			}
 		} catch(InterruptedException exc) {
@@ -191,12 +186,10 @@ public abstract class Server {
 						Thread clientThread = new Thread(conn);
 						clientThread.setDaemon(true);
 						clientThread.start();
-						try {
-							onClientConnected(conn);
-						} catch(Exception e) {
-							System.err.println("exception during onClientConnected");
-							e.printStackTrace();
-						}
+						
+						// put this thread back to waiting
+						// use a new one for handling, in case onClientConnected is a long task
+						new Thread(() -> onClientConnected(conn), "onClientConnected").start();
 					} else {
 						conn.disconnect();
 					}
@@ -222,12 +215,7 @@ public abstract class Server {
 		if(connectedClients.contains(conn)) {
 			conn.disconnect();
 			connectedClients.remove(conn);
-			try {
-				onClientDisconnected(conn);
-			} catch(Exception e) {
-				System.err.println("exception during onClientDisconnected");
-				e.printStackTrace();
-			}
+			new Thread(() -> onClientDisconnected(conn), "onClientDisconnected").start();
 			return true;
 		} else {
 			System.out.printf("[Server][Warning] connection (%s) is not a connected client%n", conn.toStringWithoutServer());

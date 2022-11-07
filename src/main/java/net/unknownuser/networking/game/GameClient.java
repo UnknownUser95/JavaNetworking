@@ -28,6 +28,8 @@ public class GameClient extends Client {
 	
 	private RGB playerColour = new RGB(255, 0, 0);
 	
+	private ArrayDeque<MoveDirection> moveCache = new ArrayDeque<>();
+	
 	protected Shell shell;
 	private Text textChatInput;
 	private List chatMessageList;
@@ -178,6 +180,7 @@ public class GameClient extends Client {
 				}
 				
 				if(board.movePlayer(playerID, direction)) {
+					moveCache.push(direction);
 					sendMessage(new Message<>(MessageType.MOVE, direction));
 					// redraw
 					async(canvas::redraw);
@@ -313,11 +316,21 @@ public class GameClient extends Client {
 		}
 		case MOVE -> {
 			Tuple<Integer, MoveDirection> move = (Tuple<Integer, MoveDirection>) message.content;
-			board.movePlayer(move.x, move.y);
+			
+			if(move.x == playerID && !moveCache.isEmpty()) {
+				MoveDirection lastMove = moveCache.pop();
+				if(move.y == lastMove) {
+					System.out.println("removed move from cache");
+				} else {
+					System.out.println("invalid move queue");
+				}
+			} else {
+				board.movePlayer(move.x, move.y);
+			}
 			redrawCanvas = true;
 		}
 		case MOVE_REJECTED -> {
-			MoveDirection dir = (MoveDirection) message.content;
+			MoveDirection dir = moveCache.pop();
 			board.movePlayer(playerID, dir);
 		}
 		case NEW_PLAYER -> {

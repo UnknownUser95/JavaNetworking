@@ -320,9 +320,11 @@ public class GameClient extends Client {
 			if(move.x == playerID && !moveCache.isEmpty()) {
 				MoveDirection lastMove = moveCache.pop();
 				if(move.y == lastMove) {
-					System.out.println("removed move from cache");
+					System.out.println("move confirmed by server");
 				} else {
-					System.out.println("invalid move queue");
+					System.out.println("invalid move cache");
+					moveCache.clear();
+					sendMessage(new Message<>(MessageType.REQUEST_POSITION, playerID));
 				}
 			} else {
 				board.movePlayer(move.x, move.y);
@@ -330,14 +332,23 @@ public class GameClient extends Client {
 			redrawCanvas = true;
 		}
 		case MOVE_REJECTED -> {
-			MoveDirection dir = moveCache.pop();
-			board.movePlayer(playerID, dir);
+			moveCache.clear();
+			sendMessage(new Message<>(MessageType.REQUEST_POSITION, playerID));
+		}
+		case SET_POSITION -> {
+			Tuple<Integer, Point> playerPos = (Tuple<Integer, Point>) message.content;
+			synchronized (board) {
+				board.addPlayer(playerPos.x, playerPos.y);
+			}
+			redrawCanvas = true;
 		}
 		case NEW_PLAYER -> {
 			// add a new player
 			// they don't have a colour yet
 			Tuple<Integer, Point> newPlayer = (Tuple<Integer, Point>) message.content;
-			board.addPlayer(newPlayer.x, newPlayer.y);
+			synchronized (board) {
+				board.addPlayer(newPlayer.x, newPlayer.y);
+			}
 			redrawCanvas = true;
 		}
 		case SET_COLOUR -> {
@@ -349,16 +360,29 @@ public class GameClient extends Client {
 		case SYNC_PLAYERS -> {
 			// update player location and colours
 			ArrayList<Tuple<Integer, Tuple<Point, RGB>>> playerColours = (ArrayList<Tuple<Integer, Tuple<Point, RGB>>>) message.content;
-			// addPlayer also updates the given player, if it already exists
-			for(Tuple<Integer, Tuple<Point, RGB>> idColour : playerColours) {
-				board.addPlayer(idColour.x, idColour.y.x, idColour.y.y);
+			synchronized (board) {
+				// addPlayer also updates the given player, if it already exists
+				for(Tuple<Integer, Tuple<Point, RGB>> idColour : playerColours) {
+					board.addPlayer(idColour.x, idColour.y.x, idColour.y.y);
+				}
+			}
+			redrawCanvas = true;
+		}
+		case SYNC_PLAYER_POSITIONS -> {
+			ArrayList<Tuple<Integer, Point>> positions = (ArrayList<Tuple<Integer, Point>>) message.content;
+			synchronized (board) {
+				for(Tuple<Integer, Point> pos : positions) {
+					board.addPlayer(pos.x, pos.y);
+				}
 			}
 			redrawCanvas = true;
 		}
 		case DELETE_PLAYER -> {
 			// remove a player from the game
-			int id = (int) message.content;
-			board.removePlayer(id);
+			synchronized (board) {
+				int id = (int) message.content;
+				board.removePlayer(id);
+			}
 			redrawCanvas = true;
 		}
 		default -> System.out.println("unknown or unhandled message type: " + message.type);

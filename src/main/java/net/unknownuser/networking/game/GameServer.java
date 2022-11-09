@@ -25,29 +25,73 @@ public class GameServer extends Server {
 		server.start();
 	}
 	
+//	@Override
+//	public synchronized boolean start() throws IOException {
+//		boolean started = super.start();
+//		// automatically synchronize player positions
+//		if(started) {
+//			// every 5 seconds, synchronize all players
+//			Timer timer = new Timer();
+//			TimerTask task = new TimerTask() {
+//				@Override
+//				public void run() {
+//					synchronizePlayerPositions();
+//				}
+//			};
+//			timer.schedule(task, 0, 5 * 1000);
+//		}
+//		return started;
+//	}
+	
 	public Point getDefaultStartingPoint() {
 		return new Point(DEFAULT_STARTING_POSITION.x, DEFAULT_STARTING_POSITION.y);
+	}
+	
+	public void synchronizePlayerPositions() {
+		if(connectionIDs.size() > 1) {
+			synchronized (connectionIDs) {
+				ArrayList<Tuple<Integer, Point>> positions = new ArrayList<>(connectionIDs.size());
+				for(int id : connectionIDs.values()) {
+					Point pos = board.getPlayerPosition(id);
+					if(pos == null) {
+						System.out.println("config null:");
+						System.out.println("id: " + id);
+						System.out.println("pos:" + pos);
+						continue;
+					}
+					
+					positions.add(new Tuple<>(id, pos));
+				}
+				
+				if(!positions.isEmpty()) {
+					broadcastMessage(new MessageToSend(new Message<>(MessageType.SYNC_PLAYER_POSITIONS, positions), null));
+				}
+			}
+		}
 	}
 	
 	public void synchronizePlayers() {
 		// synchronize existing players
 		if(connectionIDs.size() > 1) {
-			// synchronize already connected players
-			ArrayList<Tuple<Integer, Tuple<Point, RGB>>> config = new ArrayList<>(connectionIDs.size());
-			for(int id : connectionIDs.values()) {
-				Point pos = board.getPlayerPosition(id);
-				RGB col = board.getPlayerColour(id);
-				if(pos == null || col == null) {
-					System.out.println("conf null: ");
-					System.out.println("id: " + id);
-					System.out.println("colour: " + col);
-					System.out.println("position: " + pos);
-					continue;
+			synchronized (connectionIDs) {
+				// synchronize already connected players
+				ArrayList<Tuple<Integer, Tuple<Point, RGB>>> config = new ArrayList<>(connectionIDs.size());
+				for(int id : connectionIDs.values()) {
+					Point pos = board.getPlayerPosition(id);
+					RGB col = board.getPlayerColour(id);
+					if(pos == null || col == null) {
+						System.out.println("config null:");
+						System.out.println("id: " + id);
+						System.out.println("colour: " + col);
+						System.out.println("position: " + pos);
+						continue;
+					}
+					config.add(new Tuple<>(id, new Tuple<>(pos, col)));
 				}
-				config.add(new Tuple<>(id, new Tuple<>(pos, col)));
-			}
-			if(!config.isEmpty()) {
-				broadcastMessage(new MessageToSend(new Message<>(MessageType.SYNC_PLAYERS, config), null));
+				
+				if(!config.isEmpty()) {
+					broadcastMessage(new MessageToSend(new Message<>(MessageType.SYNC_PLAYERS, config), null));
+				}
 			}
 		}
 	}
@@ -64,9 +108,14 @@ public class GameServer extends Server {
 			String chatMessage = String.format("%s: %s%n", playerNames.get(senderID), message.content);
 			broadcastMessage(new MessageToSend(new Message<>(MessageType.CHAT_MESSAGE, chatMessage), sender));
 		}
+		case REQUEST_POSITION -> {
+			sender.sendMessage(new Message<>(MessageType.SET_POSITION, new Tuple<>(senderID, board.getPlayerPosition(senderID))));
+		}
 		case SET_PREFERENCES -> {
 			Tuple<String, RGB> playerPrefs = (Tuple<String, RGB>) message.content;
-			board.setPlayerColour(senderID, playerPrefs.y);
+			synchronized (board) {
+				board.setPlayerColour(senderID, playerPrefs.y);
+			}
 			if(playerPrefs.x.isBlank()) {
 				System.out.println("anonymous user connected");
 				playerNames.put(senderID, "Anon");
@@ -78,7 +127,13 @@ public class GameServer extends Server {
 		}
 		case MOVE -> {
 			MoveDirection dir = (MoveDirection) message.content;
-			if(board.movePlayer(senderID, dir)) {
+			boolean successfulMove = false;
+			
+			synchronized (board) {
+				successfulMove = board.movePlayer(senderID, dir);
+			}
+			
+			if(successfulMove) {
 				broadcastMessage(new MessageToSend(new Message<>(MessageType.MOVE, new Tuple<>(senderID, dir)), null));
 			} else {
 				sender.sendMessage(new Message<>(MessageType.MOVE_REJECTED, 0));
@@ -90,19 +145,22 @@ public class GameServer extends Server {
 	
 	@Override
 	public void onClientConnected(Connection client) {
+		Point pos;
 		synchronized (connectionIDs) {
-			connectionIDs.put(client, ++idIndex);
-			Point pos = getDefaultStartingPoint();
-			board.addPlayer(idIndex, pos);
-			
-			// give ID to new player
-			client.sendMessage(new Message<>(MessageType.SET_ID, idIndex));
-
-			// notify all other players of new player
-			broadcastMessage(new MessageToSend(new Message<>(MessageType.NEW_PLAYER, new Tuple<>(idIndex, pos)), client));
-			
-			System.out.println("client connected");
+			synchronized (board) {
+				connectionIDs.put(client, ++idIndex);
+				pos = getDefaultStartingPoint();
+				board.addPlayer(idIndex, pos);
+			}
 		}
+		
+		// give ID to new player
+		client.sendMessage(new Message<>(MessageType.SET_ID, idIndex));
+		
+		// notify all other players of new player
+		broadcastMessage(new MessageToSend(new Message<>(MessageType.NEW_PLAYER, new Tuple<>(idIndex, pos)), client));
+		
+		System.out.println("client connected");
 	}
 	
 	@Override
@@ -110,13 +168,16 @@ public class GameServer extends Server {
 		int senderID = -1;
 		synchronized (connectionIDs) {
 			senderID = connectionIDs.get(client);
+			
+			broadcastMessage(new MessageToSend(new Message<>(MessageType.DELETE_PLAYER, senderID), client));
+			
+			// remove player from maps
+			synchronized (board) {
+				board.removePlayer(senderID);
+			}
+			playerNames.remove(senderID);
+			connectionIDs.remove(client);
 		}
-		
-		broadcastMessage(new MessageToSend(new Message<>(MessageType.DELETE_PLAYER, senderID), client));
-		
-		// remove player from maps
-		playerNames.remove(senderID);
-		connectionIDs.remove(client);
 		
 		System.out.println("client disconnected");
 	}
